@@ -1394,13 +1394,9 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
     );
 
     let column = state.hash_column();
-    // With one agent's page open the roster is context, not a control: it
-    // keeps updating but reads quietly so the page holds the eye.
-    let quiet = state.view() == View::Detail;
-    let tone = |color: Color| if quiet { Color::DarkGray } else { color };
     let mut rows: Vec<ListItem> = vec![ListItem::new(Line::from(Span::styled(
         "all agents",
-        Style::new().fg(tone(Color::Gray)),
+        Style::new().fg(Color::Gray),
     )))];
     // The coordinator is the one who asks, so its row is where a reader is
     // sent to read the question in full and answer it.
@@ -1408,26 +1404,14 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
     let now = Instant::now();
     let now_ms = event_log::now_ms() as i64;
     rows.extend(state.agents().iter().map(|agent| {
-        let color = tone(role_color(agent.role.as_deref()));
+        let color = role_color(agent.role.as_deref());
         let asking = waiting && agent.is_meta() && agent.state() == "active";
         let (mark, mark_color) = if asking {
             (WAITING_MARK, Color::Yellow)
         } else {
-            let (mark, color) = state.status_glyph(agent, now, now_ms);
-            (
-                mark,
-                if agent.state() == "active" {
-                    tone(color)
-                } else {
-                    color
-                },
-            )
+            state.status_glyph(agent, now, now_ms)
         };
-        let name = if quiet {
-            Style::new().fg(color)
-        } else {
-            Style::new().fg(color).add_modifier(Modifier::BOLD)
-        };
+        let name = Style::new().fg(color).add_modifier(Modifier::BOLD);
         let mut spans = vec![
             Span::styled(format!("{mark} "), Style::new().fg(mark_color)),
             Span::styled(format!("{:<width$}", agent.hash_id, width = column), name),
@@ -1447,7 +1431,7 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                         .unwrap_or_default()
                 ),
                 Style::new().fg(if agent.state() == "active" {
-                    tone(Color::White)
+                    Color::White
                 } else {
                     Color::DarkGray
                 }),
@@ -1460,7 +1444,7 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                         .map(model_and_effort)
                         .unwrap_or_default()
                 ),
-                Style::new().fg(tone(Color::White)),
+                Style::new().fg(Color::White),
             ),
             Span::styled(
                 match state.spend_of(&agent.hash_id) {
@@ -1475,23 +1459,23 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                     ),
                     None => format!("{:>6} {:>8}  ", "-", ""),
                 },
-                Style::new().fg(tone(Color::White)),
+                Style::new().fg(Color::White),
             ),
             Span::styled(
                 format!("{:<20}", agent_status(agent)),
-                Style::new().fg(status_color(agent, tone)),
+                Style::new().fg(status_color(agent)),
             ),
         ];
         // What its worktree has changed so far, the way a diff stat reads.
         if let Some((added, removed)) = state.diff_stat_of(&agent.hash_id) {
             spans.push(Span::styled(
                 format!("+{added}"),
-                Style::new().fg(tone(Color::Green)),
+                Style::new().fg(Color::Green),
             ));
             spans.push(Span::styled(",", Style::new().fg(Color::DarkGray)));
             spans.push(Span::styled(
                 format!("-{removed}"),
-                Style::new().fg(tone(Color::Red)),
+                Style::new().fg(Color::Red),
             ));
         }
         // Where its commands run: a pod by name, or the host when it asked for a pod and did
@@ -1499,11 +1483,11 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
         match (agent.env_id.as_deref(), agent.env_skipped.is_some()) {
             (Some(_), _) => spans.push(Span::styled(
                 format!("  {}", agent.exec()),
-                Style::new().fg(tone(Color::Blue)),
+                Style::new().fg(Color::Blue),
             )),
             (None, true) => spans.push(Span::styled(
                 format!("  {}", agent.exec()),
-                Style::new().fg(tone(Color::Yellow)),
+                Style::new().fg(Color::Yellow),
             )),
             (None, false) => {}
         }

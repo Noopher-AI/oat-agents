@@ -503,9 +503,9 @@ pub(crate) fn agent_status(agent: &AgentRow) -> String {
 /// Red for a failure and quiet for everything else: a finished agent that
 /// did what it was asked is not news, and a running one is already marked
 /// as running by the word and by the ● beside its name.
-pub(crate) fn status_color(agent: &AgentRow, tone: impl Fn(Color) -> Color) -> Color {
+pub(crate) fn status_color(agent: &AgentRow) -> Color {
     if agent.state() == "active" {
-        return tone(Color::White);
+        return Color::White;
     }
     match agent.outcome.as_deref() {
         Some(outcome) if outcome.contains("fail") || outcome.contains("error") => Color::Red,
