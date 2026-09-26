@@ -71,6 +71,8 @@ pub struct RunRow {
     pub id: String,
     pub open: bool,
     pub needs_human: bool,
+    /// `pod:<profile>`, `host`, or empty for a Run older than the exec events.
+    pub exec: String,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +83,33 @@ pub struct DispatchRow {
     pub session: String,
     pub alive: bool,
     pub settled: bool,
+    /// `pod:<env_id>`, `HOST (no pod)` for a role that asked for one and did not get it, or
+    /// empty for a role that never asked.
+    pub exec: String,
+}
+
+/// Where a Run's roles run their commands, read from the workflow log's exec events.
+fn run_exec(entries: &[LogEntry]) -> String {
+    entries
+        .iter()
+        .rev()
+        .find_map(|entry| match entry.event.as_str() {
+            events::EXEC_PROFILE_SELECTED => {
+                let profile = entry.details.as_ref()?.get("profile")?.as_str()?.to_string();
+                Some(format!("pod:{profile}"))
+            }
+            events::EXEC_PROFILE_NONE => Some("host".to_string()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn dispatch_exec(dispatch: &crate::store::DispatchRecord) -> String {
+    match (&dispatch.env_id, &dispatch.env_skipped) {
+        (Some(env_id), _) => format!("pod:{env_id}"),
+        (None, Some(_)) => "HOST (no pod)".to_string(),
+        (None, None) => String::new(),
+    }
 }
 
 /// A run has an open "needs a human" marker once a `needs-human` log entry has no later
@@ -156,11 +185,12 @@ impl<'a> App<'a> {
         let mut runs = Vec::new();
         for id in self.store.list_run_ids()? {
             let record = self.store.load_run(&id)?;
-            let needs_human = needs_human_open(&self.log.read_run(&id)?);
+            let entries = self.log.read_run(&id)?;
             runs.push(RunRow {
                 id,
                 open: record.is_open(),
-                needs_human,
+                needs_human: needs_human_open(&entries),
+                exec: run_exec(&entries),
             });
         }
         self.runs = runs;
@@ -195,6 +225,7 @@ impl<'a> App<'a> {
                     session,
                     alive,
                     settled: dispatch.is_settled(),
+                    exec: dispatch_exec(&dispatch),
                 });
             }
         }
@@ -387,7 +418,8 @@ impl<'a> App<'a> {
             .map(|(i, r)| {
                 let status = if r.open { "open" } else { "closed" };
                 let marker = if r.needs_human { " NEEDS HUMAN" } else { "" };
-                let label = format!("{} [{status}]{marker}", r.id);
+                let exec = if r.exec.is_empty() { String::new() } else { format!(" {}", r.exec) };
+                let label = format!("{} [{status}]{exec}{marker}", r.id);
                 let style = if i == self.run_cursor {
                     Style::default().add_modifier(Modifier::REVERSED)
                 } else {
@@ -414,7 +446,8 @@ impl<'a> App<'a> {
                 } else {
                     "stopped"
                 };
-                let label = format!("{} ({}) [{state}]", d.role, d.id);
+                let exec = if d.exec.is_empty() { String::new() } else { format!(" {}", d.exec) };
+                let label = format!("{} ({}) [{state}]{exec}", d.role, d.id);
                 let style = if i == self.dispatch_cursor {
                     Style::default().add_modifier(Modifier::REVERSED)
                 } else {
@@ -443,9 +476,13 @@ impl<'a> App<'a> {
             .iter()
             .map(|t| Line::from(t.label()))
             .collect::<Vec<_>>();
+        let agent_title = match self.dispatches.get(self.dispatch_cursor) {
+            Some(d) if !d.exec.is_empty() => format!("Agent - {}", d.exec),
+            _ => "Agent".to_string(),
+        };
         let tabs = Tabs::new(titles)
             .select(tab.index())
-            .block(Block::default().borders(Borders::ALL).title("Agent"));
+            .block(Block::default().borders(Borders::ALL).title(agent_title));
         frame.render_widget(tabs, chunks[0]);
 
         let Some(dispatch) = self.dispatches.get(self.dispatch_cursor) else {
@@ -650,6 +687,24 @@ mod tests {
         log.record(&LogEntry {
             timestamp: now_iso(),
             run_id: "run-a-open".to_string(),
+            dispatch_id: None,
+            agent: None,
+            event: events::EXEC_PROFILE_SELECTED.to_string(),
+            details: Some(serde_json::json!({"profile": "gb10", "source": "--exec-profile"})),
+        })
+        .unwrap();
+        log.record(&LogEntry {
+            timestamp: now_iso(),
+            run_id: "run-b-closed".to_string(),
+            dispatch_id: None,
+            agent: None,
+            event: events::EXEC_PROFILE_NONE.to_string(),
+            details: Some(serde_json::json!({"profile": null, "source": "none configured"})),
+        })
+        .unwrap();
+        log.record(&LogEntry {
+            timestamp: now_iso(),
+            run_id: "run-a-open".to_string(),
             dispatch_id: Some("dispatch-1".to_string()),
             agent: Some("worker".to_string()),
             event: events::AGENT_ENTER.to_string(),
@@ -665,13 +720,24 @@ mod tests {
             worktree: "/repo.oat-run-a-open-worker".to_string(),
             branch: "oat/run-a-open/worker".to_string(),
             created_at: now_iso(),
-            env_id: None,
-            image_id: None,
+            env_id: Some("oat-env-worker".to_string()),
+            image_id: Some("sha256:abc".to_string()),
+            env_skipped: None,
             settled: None,
             report: None,
             released_at: None,
         };
         store.create_dispatch(&dispatch).unwrap();
+        store
+            .create_dispatch(&DispatchRecord {
+                id: "dispatch-2".to_string(),
+                role: "reviewer".to_string(),
+                env_id: None,
+                image_id: None,
+                env_skipped: Some("this Run has no execution profile".to_string()),
+                ..dispatch.clone()
+            })
+            .unwrap();
 
         let hid = crate::event_log::hash_id("worker", "run-a-open", "dispatch-1");
         let session = crate::session::tmux::Tmux::session_name(&hid);
@@ -726,6 +792,28 @@ mod tests {
         assert!(text.contains("run-b-closed"), "{text}");
         assert!(text.contains("NEEDS HUMAN"), "{text}");
         assert!(text.contains("[closed]"), "{text}");
+    }
+
+    #[test]
+    fn picker_shows_where_each_runs_commands_run() {
+        let fx = build_fixture();
+        let app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
+        let text = draw(&app);
+        assert!(text.contains("run-a-open [open] pod:gb10"), "{text}");
+        assert!(text.contains("run-b-closed [closed] host"), "{text}");
+    }
+
+    #[test]
+    fn roster_and_agent_page_show_each_dispatchs_pod_or_its_absence() {
+        let fx = build_fixture();
+        let mut app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
+        app.enter_roster().unwrap();
+        let text = draw(&app);
+        assert!(text.contains("pod:oat-env-worker"), "{text}");
+        assert!(text.contains("HOST (no pod)"), "{text}");
+        app.enter_agent();
+        let text = draw(&app);
+        assert!(text.contains("Agent - pod:oat-env-worker"), "{text}");
     }
 
     #[test]

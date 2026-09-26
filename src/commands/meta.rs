@@ -77,7 +77,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         .unwrap_or_else(|| generate_id("run"));
     let run_id = worktree::sanitize_segment(&run_name);
 
-    let base_branch = match args.base_branch {
+    let base_branch = match args.base_branch.clone() {
         Some(b) => b,
         None => worktree::default_branch(&repo)?,
     };
@@ -143,24 +143,19 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         details: Some(json!({"plugins": plugin_records})),
     })?;
 
-    // The Run's execution profile is chosen once, here, and every role launch inherits it
-    // (ticket Scope): `meta fire` selects it explicitly, from the repository's default, or not
-    // at all with `--no-exec`. Whether any given role actually gets an environment is still
-    // that role's own `exec_environment` field (ADR-0001's consequence: no role name is
-    // consulted here).
-    if !args.no_exec {
-        let exec_config = crate::env::config::load(env, Some(&repo))?;
-        match crate::env::config::resolve(&exec_config, args.exec_profile.as_deref()) {
-            Ok((profile_name, _)) => {
-                crate::env::state::EnvStore::open(env)?.save_run_profile(&run_id, &profile_name)?;
-            }
-            Err(error) if args.exec_profile.is_some() => return Err(error),
-            Err(_) => {
-                // No profile was requested and the repository has no default: the Run simply
-                // has none, which is not an error until a role that needs one is launched.
-            }
+    let exec = select_exec_profile(env, &repo, &run_id, &args, catalog)?;
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: None,
+        agent: None,
+        event: match exec.profile {
+            Some(_) => events::EXEC_PROFILE_SELECTED,
+            None => events::EXEC_PROFILE_NONE,
         }
-    }
+        .to_string(),
+        details: Some(exec.to_json()),
+    })?;
 
     let model = core_role
         .models
@@ -200,7 +195,71 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
+        "exec": exec.to_json(),
     }))
+}
+
+/// Which execution profile a Run got, and why — reported in `meta fire`'s output and the
+/// workflow log, so a Run whose roles fall back to the host is never a silent one.
+struct ExecSelection {
+    profile: Option<String>,
+    /// `--exec-profile`, `default_profile`, `--no-exec`, or `none configured`.
+    source: &'static str,
+    /// Roles of this Run that declare `exec_environment = true`.
+    roles_wanting: Vec<String>,
+}
+
+impl ExecSelection {
+    fn warning(&self) -> Option<String> {
+        if self.profile.is_some() || self.roles_wanting.is_empty() || self.source == "--no-exec" {
+            return None;
+        }
+        Some(format!(
+            "this Run has no execution profile, so {} will run commands on the host; \
+             pass --exec-profile <name> or set default_profile in .oat/exec.toml",
+            self.roles_wanting.join(", ")
+        ))
+    }
+
+    fn to_json(&self) -> Value {
+        json!({
+            "profile": self.profile,
+            "source": self.source,
+            "roles_wanting_environment": self.roles_wanting,
+            "warning": self.warning(),
+        })
+    }
+}
+
+/// The Run's execution profile is chosen once, here, and every role launch inherits it:
+/// `meta fire` selects it explicitly, from the configured default, or not at all with
+/// `--no-exec`. Whether any given role actually gets an environment is still that role's own
+/// `exec_environment` field (ADR-0001's consequence: no role name is consulted here).
+fn select_exec_profile(
+    env: &dyn Environment,
+    repo: &std::path::Path,
+    run_id: &str,
+    args: &FireArgs,
+    catalog: &dyn RoleCatalog,
+) -> Result<ExecSelection> {
+    let roles_wanting = catalog
+        .role_names()
+        .into_iter()
+        .filter(|name| catalog.role(name).is_ok_and(|role| role.exec_environment))
+        .collect();
+    if args.no_exec {
+        return Ok(ExecSelection { profile: None, source: "--no-exec", roles_wanting });
+    }
+    let exec_config = crate::env::config::load(env, Some(repo))?;
+    match crate::env::config::resolve(&exec_config, args.exec_profile.as_deref()) {
+        Ok((profile_name, _)) => {
+            crate::env::state::EnvStore::open(env)?.save_run_profile(run_id, &profile_name)?;
+            let source = if args.exec_profile.is_some() { "--exec-profile" } else { "default_profile" };
+            Ok(ExecSelection { profile: Some(profile_name), source, roles_wanting })
+        }
+        Err(error) if args.exec_profile.is_some() => Err(error),
+        Err(_) => Ok(ExecSelection { profile: None, source: "none configured", roles_wanting }),
+    }
 }
 
 fn finish(args: FinishArgs, env: &dyn Environment) -> Result<Value> {

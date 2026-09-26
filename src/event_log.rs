@@ -200,6 +200,9 @@ pub mod events {
     pub const ENV_DESTROYED: &str = "env_destroyed";
     pub const ENV_IMAGE_BUILT: &str = "env_image_built";
     pub const ENV_REAPED: &str = "env_reaped";
+    pub const EXEC_PROFILE_SELECTED: &str = "exec_profile_selected";
+    pub const EXEC_PROFILE_NONE: &str = "exec_profile_none";
+    pub const ENV_SKIPPED: &str = "env_skipped";
     pub const PLUGINS_RESOLVED: &str = "plugins_resolved";
 }
 

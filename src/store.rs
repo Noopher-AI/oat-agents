@@ -61,6 +61,10 @@ pub struct DispatchRecord {
     pub env_id: Option<String>,
     #[serde(default)]
     pub image_id: Option<String>,
+    /// Why a role that asked for an execution environment was launched without one, so its
+    /// commands ran on the host. `None` when it got one, or never asked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env_skipped: Option<String>,
     #[serde(default)]
     pub settled: Option<Settlement>,
     #[serde(default)]

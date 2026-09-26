@@ -22,6 +22,25 @@ description: Read the whole fleet's state from the workflow log, the store, and 
 - `oat-agents dispatch read --dispatch D --run R --source auto --limit 50` — the text on an
   agent's terminal. The last resort: it is long and unstructured. Exhaust the log first.
 
+## Where a Run's commands run
+
+Every Run records, when it is fired, whether its roles get execution environments (pods) and
+why: an `exec_profile_selected` event names the profile; an `exec_profile_none` event says there
+is none, and its `warning` names the roles that asked for one and will run on the host instead.
+Every role launched without the environment it asked for adds an `env_skipped` event for its
+Dispatch. Read them with `oat-agents log show --run R --event exec_profile_none` (or
+`exec_profile_selected`, `env_skipped`), and read the environments themselves with:
+
+- `oat-agents dispatch show --dispatch D --run R` — `env_id` and `image_id` when the Dispatch
+  got a pod, `env_skipped` when it asked for one and ran on the host.
+- `oat-agents env status` — every registered environment: its pod, namespace, image and run.
+- `oat-agents env evidence --worktree PATH` — which commands already ran against the code as it
+  stands, and in which image.
+
+A role that asked for a pod and ran on the host is worth telling the operator about: its
+verification ran somewhere nothing recorded, so a report that cites it proves less than it
+seems to.
+
 ## Telling a stuck Run from a slow one
 
 A `run wait` that times out returns a liveness report for every still-active Dispatch. Two
