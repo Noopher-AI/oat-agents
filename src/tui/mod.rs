@@ -974,14 +974,14 @@ impl TuiState {
 
     /// The keys that work from anywhere. The checklist is a Run's, so the
     /// console's window, which has no Run, does not offer it.
-    fn global_items(&self, esc: Option<&'static str>) -> Vec<menu::Item> {
+    fn global_items(&self, back: Option<(&'static str, &'static str)>) -> Vec<menu::Item> {
         let mut items = vec![menu::item("ctrl+\\", "console")];
         if !self.console {
             items.push(menu::item("ctrl+l", "checklist"));
         }
         // While typing, esc and q are the agent's.
-        if let Some(esc) = esc {
-            items.push(menu::item("esc", esc));
+        if let Some((key, label)) = back {
+            items.push(menu::item(key, label));
             items.push(menu::item("q", "quit"));
         }
         items
@@ -1394,16 +1394,18 @@ impl TuiState {
         }
     }
 
-    /// The key hints for wherever the view stands.
+    /// Every key that works wherever the view stands, grouped: keys that
+    /// move, keys that act, keys that leave.
     pub fn menu(&self) -> Vec<Vec<menu::Item>> {
         use menu::item;
         if self.typing {
             return vec![
                 vec![
-                    item("ctrl+]", "leave live"),
                     item("keys", "go to the agent"),
                     item("wheel/shift+PgUp", "scroll back"),
+                    item("drag", "select & copy"),
                 ],
+                vec![item("ctrl+]", "stop typing")],
                 self.global_items(None),
             ];
         }
@@ -1448,49 +1450,75 @@ impl TuiState {
                             Focus::Timeline => "scroll",
                         },
                     ),
+                    item("PgUp/PgDn", "page"),
+                    item("g/G", "top/end"),
+                ],
+                vec![
+                    item("enter", "open agent"),
                     item("e", format!("events:{}", self.filter().label())),
                     item(
                         "f",
                         format!("follow:{}", if self.following() { "on" } else { "off" }),
                     ),
+                    self.close_item(),
                 ],
-                vec![item("enter", "open live"), self.close_item()],
-                self.global_items(Some("runs")),
+                self.global_items(Some(("esc", "runs"))),
             ],
             View::Detail => {
                 let scrolling = self.preview.as_ref().is_some_and(Preview::scrolling);
-                let mut first = Vec::new();
-                if self.tabs().len() > 1 {
-                    first.push(item("tab", format!("tab:{}", self.tab.label())));
-                }
                 let keys = self.preview.as_ref().is_some_and(Preview::selecting_with_keys);
-                match self.tab {
-                    Tab::Live if keys => {
-                        first.push(item("↑↓←→", "move"));
-                        first.push(item("v", "mark"));
-                        first.push(item("y", "copy"));
-                        first.push(item("esc", "cancel"));
-                    }
-                    Tab::Live if scrolling => {
-                        first.push(item("↑↓/PgUp/PgDn", "history"));
-                        first.push(item("v/drag", "select"));
-                        first.push(item("esc", "exit scroll"));
-                    }
-                    Tab::Live => {
-                        first.push(item("enter", "type"));
-                        first.push(item("shift+↑↓", "scroll back"));
-                        first.push(item("v/drag", "select"));
-                    }
-                    _ => {
-                        first.push(item("↑↓", "scroll"));
-                        first.push(item("g/G", "top/end"));
-                    }
+                let (moves, acts) = match self.tab {
+                    Tab::Live if keys => (
+                        vec![
+                            item("↑↓←→", "move"),
+                            item("PgUp/PgDn", "page"),
+                            item("g/G", "top/end"),
+                            item("0/$", "line start/end"),
+                        ],
+                        vec![
+                            item("v", "mark"),
+                            item("y", "copy"),
+                            item("esc", "cancel"),
+                        ],
+                    ),
+                    Tab::Live if scrolling => (
+                        vec![
+                            item("↑↓", "line"),
+                            item("PgUp/PgDn", "page"),
+                            item("wheel", "scroll"),
+                        ],
+                        vec![
+                            item("v/drag", "select"),
+                            item("enter", "type"),
+                            item("esc", "back to live"),
+                        ],
+                    ),
+                    Tab::Live => (
+                        vec![item("↑↓/PgUp/wheel", "scroll back")],
+                        vec![item("enter", "type"), item("v/drag", "select")],
+                    ),
+                    _ => (
+                        vec![
+                            item("↑↓", "scroll"),
+                            item("PgUp/PgDn", "page"),
+                            item("g/G", "top/end"),
+                        ],
+                        Vec::new(),
+                    ),
+                };
+                let mut acts = acts;
+                if self.tabs().len() > 1 {
+                    acts.push(item("tab", format!("tab:{}", self.tab.label())));
                 }
-                vec![
-                    first,
-                    vec![self.close_item()],
-                    self.global_items(Some("back")),
-                ]
+                acts.push(self.close_item());
+                // Esc is taken while reading back, and the left arrow while
+                // selecting with the keys; backspace always leaves.
+                let back = match self.tab {
+                    Tab::Live if keys => ("backspace", "back"),
+                    Tab::Live if scrolling => ("←", "back"),
+                    _ => ("esc/←", "back"),
+                };
+                vec![moves, acts, self.global_items(Some(back))]
             }
         }
     }
@@ -1509,6 +1537,7 @@ fn roster_rule(state: &TuiState) -> bool {
 }
 
 pub fn draw(frame: &mut Frame, state: &mut TuiState) {
+    let hints = menu::lines(&state.menu(), frame.area().width);
     let areas = Layout::vertical([
         Constraint::Length(1),
         // The roster holds a row per agent, the "all agents" row, and the
@@ -1517,7 +1546,7 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
             (state.agents.len() as u16 + 1 + roster_rule(state) as u16).clamp(2, 9) + 2,
         ),
         Constraint::Min(3),
-        Constraint::Length(2),
+        Constraint::Length(hints.len() as u16 + 1),
     ])
     .split(frame.area());
 
@@ -1695,11 +1724,9 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
         draw_timeline(frame, areas[2], state);
     }
 
-    let footer = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(areas[3]);
-    frame.render_widget(
-        Paragraph::new(menu::line(&state.menu(), footer[0].width)),
-        footer[0],
-    );
+    let footer = Layout::vertical([Constraint::Length(hints.len() as u16), Constraint::Length(1)])
+        .split(areas[3]);
+    frame.render_widget(Paragraph::new(hints), footer[0]);
     menu::draw_notice(frame, footer[1], state.notice.as_ref());
 }
 

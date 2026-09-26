@@ -385,7 +385,7 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
     assert!(text.contains("finished"), "the rule separates live from finished:\n{text}");
     assert!(text.contains(WAITING_MARK), "the coordinator that asked is marked:\n{text}");
     assert!(text.contains(" timeline "), "{text}");
-    assert!(text.contains("enter open live"), "{text}");
+    assert!(text.contains("enter open agent"), "{text}");
     assert!(text.contains("ctrl+\\ console"), "{text}");
     assert!(text.contains("ctrl+l checklist"), "{text}");
 }
@@ -444,7 +444,8 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
 
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("running 3 tests"), "the screen shows while watching:\n{text}");
-    assert!(text.contains("live · enter to type"), "{text}");
+    assert!(text.contains("· live ─"), "{text}");
+    assert!(text.contains("enter type"), "the keys are in the hints, not the title:\n{text}");
     state.fit_preview(&control);
 
     // Watching, keys stay with the view: j scrolls back rather than reaching the agent.
@@ -458,7 +459,8 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     state.on_key_with(key(KeyCode::Enter), &control);
     assert!(state.typing(), "enter steps into the agent's terminal");
     let text = screen(120, 30, |frame| draw(frame, &mut state));
-    assert!(text.contains("live · typing (ctrl+] leaves)"), "{text}");
+    assert!(text.contains("live · typing"), "{text}");
+    assert!(text.contains("ctrl+] stop typing"), "{text}");
 
     state.on_key_with(key(KeyCode::Char('q')), &control);
     state.on_key_with(key(KeyCode::Enter), &control);
@@ -693,4 +695,30 @@ fn a_copy_reaches_the_terminal_as_base64() {
     assert_eq!(control::base64(b"fo"), "Zm8=");
     assert_eq!(control::base64(b"foo"), "Zm9v");
     assert_eq!(control::base64("選取".as_bytes()), "6YG45Y+W");
+}
+
+#[test]
+fn every_key_is_listed_in_at_most_three_rows_no_wider_than_the_cap() {
+    let fx = fixture();
+    let state = fx.state();
+    // Overview, a wide terminal: every hint shows, wrapped rather than run across it.
+    let rows = menu::lines(&state.menu(), 240);
+    let shown: String = rows.iter().map(|row| row.to_string() + "\n").collect();
+    for item in state.menu().iter().flatten() {
+        assert!(shown.contains(item.key) && shown.contains(&item.desc), "{} missing:\n{shown}", item.key);
+    }
+    assert!((2..=menu::MAX_ROWS).contains(&rows.len()), "{shown}");
+    assert!(rows.iter().all(|row| row.width() <= menu::MAX_WIDTH as usize), "{shown}");
+
+    // Narrow, the rows stay three and the way out stays.
+    let rows = menu::lines(&state.menu(), 50);
+    assert!(rows.len() <= menu::MAX_ROWS);
+    assert!(rows.iter().all(|row| row.width() <= 50));
+    assert!(rows.last().unwrap().to_string().contains("q quit"));
+
+    let (mut state, _control, _) = watching_worker(&fx, "$ cargo test");
+    let text = screen(160, 30, |frame| draw(frame, &mut state));
+    for key in ["enter type", "v/drag select", "tab tab:live", "x close run", "ctrl+l checklist", "q quit"] {
+        assert!(text.contains(key), "{key} missing:\n{text}");
+    }
 }

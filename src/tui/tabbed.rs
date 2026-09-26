@@ -89,22 +89,15 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
         Some((first, total)) => (
             title_of(
                 state,
-                if keys {
-                    "live · select (v marks, y copies, esc leaves)"
-                } else {
-                    "live · scroll (esc exits)"
-                },
+                if keys { "live · select" } else { "live · scroll" },
             ),
             format!(
                 " {first}-{} of {total} ",
                 (first + inner.height as usize).saturating_sub(1).min(total)
             ),
         ),
-        None if state.typing() => (
-            title_of(state, "live · typing (ctrl+] leaves)"),
-            String::new(),
-        ),
-        None => (title_of(state, "live · enter to type"), String::new()),
+        None if state.typing() => (title_of(state, "live · typing"), String::new()),
+        None => (title_of(state, "live"), String::new()),
     };
     let typing = state.typing();
     let preview = state.preview.as_mut().expect("checked above");

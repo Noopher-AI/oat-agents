@@ -191,9 +191,23 @@ pub fn draw_runs(
     spend: &HashMap<String, Usage>,
 ) {
     let list = &picker.list;
+    let hints = menu::lines(
+        &[
+            vec![menu::item("↑↓", "run"), menu::item("enter", "open")],
+            vec![
+                menu::item("x", "close"),
+                menu::item("c", "clean worktrees"),
+            ],
+            vec![menu::item("ctrl+\\", "console"), menu::item("esc/q", "quit")],
+        ],
+        frame.area().width,
+    );
+    // The hints, then a row of their own for what the last key did, so
+    // neither covers the other.
     let areas = Layout::vertical([
         Constraint::Length(1),
         Constraint::Min(3),
+        Constraint::Length(hints.len() as u16),
         Constraint::Length(1),
     ])
     .split(frame.area());
@@ -332,6 +346,7 @@ pub fn draw_runs(
         &mut state,
     );
 
+    frame.render_widget(Paragraph::new(hints), areas[2]);
     if let Some((run_id, agents)) = picker.confirming() {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -349,35 +364,17 @@ pub fn draw_runs(
                 Span::styled("y", Style::new().fg(Color::Cyan)),
                 Span::raw(" confirm · any other key cancels"),
             ])),
-            areas[2],
+            areas[3],
         );
-        return;
-    }
-    if let Some(notice) = picker.notice() {
+    } else if let Some(notice) = picker.notice() {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 format!(" {notice}"),
                 Style::new().fg(Color::Yellow),
             ))),
-            areas[2],
+            areas[3],
         );
-        return;
     }
-    frame.render_widget(
-        Paragraph::new(menu::line(
-            &[
-                vec![menu::item("↑↓", "run"), menu::item("enter", "open")],
-                vec![
-                    menu::item("x", "close"),
-                    menu::item("c", "clean worktrees"),
-                    menu::item("ctrl+\\", "console"),
-                ],
-                vec![menu::item("q", "quit")],
-            ],
-            areas[2].width,
-        )),
-        areas[2],
-    );
 }
 
 /// The space between two columns of the Run list.
