@@ -120,6 +120,68 @@ fn fresh_role_gets_its_own_child_worktree() {
 }
 
 #[test]
+fn role_fire_defaults_to_the_run_s_recorded_backend() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    let env = world.env();
+    let catalog = InMemoryCatalogBuilder::new()
+        .with_role(RoleDefinition {
+            name: "worker".to_string(),
+            instructions: "Write the pottery this task asks for.".to_string(),
+            models: BTreeMap::new(),
+            skills: vec![oat_agents::role::SkillRef {
+                name: "glazing".to_string(),
+                files: vec![oat_agents::role::SkillFile {
+                    relative_path: std::path::PathBuf::from("SKILL.md"),
+                    contents: b"# Glazing".to_vec(),
+                    executable: false,
+                }],
+            }],
+            start: StartLocation::Fresh,
+            exec_environment: false,
+            prior_verification: false,
+        })
+        .with_core_role(
+            CoreRole::Meta,
+            CoreRoleDefinition {
+                instructions: "Coordinate the pottery workshop.".to_string(),
+                models: BTreeMap::new(),
+                skills: Vec::new(),
+            },
+        )
+        .build();
+
+    let fire = parse(&[
+        "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(),
+        "--name", "run-codex", "--agent", "codex",
+    ]);
+    run_json(fire, &env, &catalog);
+
+    let env_with_run = world.env().with_var("OAT_RUN_ID", "run-codex");
+    let role_fire = parse(&["role", "fire", "worker", "--name", "w1", "--prompt", "do work"]);
+    let result = run_json(role_fire, &env_with_run, &catalog);
+
+    let worktree = std::path::PathBuf::from(result["worktree"].as_str().unwrap());
+    let dispatch_dir = std::path::PathBuf::from(result["dispatch_dir"].as_str().unwrap());
+
+    let script = std::fs::read_to_string(dispatch_dir.join("launch.sh")).unwrap();
+    assert!(script.contains("codex"), "launch script targets Codex: {script}");
+    assert!(!script.contains("claude"), "launch script does not target Claude: {script}");
+
+    let prompt = std::fs::read_to_string(dispatch_dir.join("prompt.md")).unwrap();
+    assert!(prompt.contains("Codex"), "prompt names Codex as the backend: {prompt}");
+
+    assert!(
+        worktree.join(".agents/skills/glazing/SKILL.md").exists(),
+        "the role's skill is materialized under .agents/skills/, Codex's convention"
+    );
+    assert!(
+        !worktree.join(".claude/skills").exists(),
+        "no Claude-only skill directory is created for a Codex-backed role"
+    );
+}
+
+#[test]
 fn existing_role_runs_in_the_named_worktree() {
     let repo = TempRepo::new();
     let world = TestWorld::new();

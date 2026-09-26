@@ -23,8 +23,8 @@ pub struct FireArgs {
     pub from: Option<PathBuf>,
     #[arg(long)]
     pub name: Option<String>,
-    #[arg(long, default_value = "claude")]
-    pub agent: String,
+    #[arg(long)]
+    pub agent: Option<String>,
     #[arg(long)]
     pub trust_workspace: bool,
     #[arg(long)]
@@ -44,11 +44,13 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         .var("OAT_RUN_ID")
         .ok_or_else(|| err(codes::RUN_NOT_BOUND, "role fire runs inside a Run; OAT_RUN_ID is not set"))?;
     let task = crate::resolve_text_input(&args.prompt, &args.input_file)?;
-    let backend = Backend::from_str(&args.agent)?;
 
     let store = Store::open(env)?;
     let run_record: RunRecord = store.load_run(&run_id)?;
     let repo = PathBuf::from(&run_record.repo);
+
+    let agent = args.agent.clone().unwrap_or_else(|| run_record.backend.clone());
+    let backend = Backend::from_str(&agent)?;
 
     let role_def = catalog.role(&args.role)?;
 
