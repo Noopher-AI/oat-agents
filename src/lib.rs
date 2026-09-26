@@ -1,5 +1,6 @@
 pub mod checklist;
 pub mod commands;
+pub mod env;
 pub mod environment;
 pub mod error;
 pub mod event_log;
@@ -15,6 +16,7 @@ pub mod usage;
 pub mod worktree;
 
 use clap::{Parser, Subcommand};
+use env::integration::ExecEnvironments;
 use environment::Environment;
 use error::{codes, err};
 use role::RoleCatalog;
@@ -64,6 +66,11 @@ pub enum TopCommand {
         #[command(subcommand)]
         command: commands::checklist::ChecklistCommand,
     },
+    /// Execution environments: containers a Dispatch's build and test commands run in.
+    Env {
+        #[command(subcommand)]
+        command: env::commands::EnvSubcommand,
+    },
 }
 
 /// Exactly one of `--prompt` or `--input-file` is required across several commands; this
@@ -86,16 +93,31 @@ pub fn resolve_text_input(prompt: &Option<String>, input_file: &Option<std::path
 
 /// The one testable entry point: every command's logic runs through here against an injected
 /// `Environment` and `RoleCatalog`, so a test never needs a real model, a real home directory,
-/// or a real plugin source.
+/// or a real plugin source. Execution environments go through their own seam
+/// (`env::integration::ExecEnvironments`) for the same reason: a test of `role fire`'s wiring
+/// should not need a cluster.
 pub fn execute(cli: Cli, env: &dyn Environment, catalog: &dyn RoleCatalog) -> anyhow::Result<Value> {
+    execute_with_exec(cli, env, catalog, &env::integration::LiveExecEnvironments)
+}
+
+pub fn execute_with_exec(
+    cli: Cli,
+    env: &dyn Environment,
+    catalog: &dyn RoleCatalog,
+    exec: &dyn ExecEnvironments,
+) -> anyhow::Result<Value> {
     match cli.command {
         TopCommand::Meta { command } => commands::meta::run(command, env, catalog),
-        TopCommand::Role { command } => commands::role::run(command, env, catalog),
+        TopCommand::Role { command } => commands::role::run(command, env, catalog, exec),
         TopCommand::Run { command } => commands::run::run(command, env),
         TopCommand::Dispatch { command } => commands::dispatch::run(command, env),
         TopCommand::Log { command } => commands::log::run(command, env),
         TopCommand::BigPlan { command } => commands::big_plan::run(command, env),
         TopCommand::Checklist { command } => commands::checklist::run(command, env),
+        TopCommand::Env { command } => {
+            let log = event_log::EventLog::open(env);
+            env::commands::execute(env, &log, command)
+        }
     }
 }
 
