@@ -1,0 +1,4 @@
+skills = ["sample-skill"]
+
+[model.claude]
+model = "sample-claude-meta-model"

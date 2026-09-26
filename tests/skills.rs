@@ -104,6 +104,37 @@ fn a_repository_skill_of_the_same_name_refuses_the_launch_and_creates_nothing() 
 }
 
 #[test]
+fn skill_md_rewrite_only_touches_a_declared_cross_reference_never_a_shell_variable() {
+    let repo = TempRepo::new();
+    let path = repo.path();
+
+    let skill_md = "# Alpha\n\nSee $beta for details.\n\nExample: `echo $HOME/$PATH $1`\n";
+    let skills = vec![
+        skill("alpha", vec![file("SKILL.md", skill_md, false)]),
+        skill("beta", vec![file("SKILL.md", "# Beta", false)]),
+    ];
+
+    materialize_skills(&path, Backend::Claude, &skills).unwrap();
+    let claude_alpha = std::fs::read_to_string(path.join(".claude/skills/alpha/SKILL.md")).unwrap();
+    assert!(claude_alpha.contains("See beta for details"), "the declared cross-reference is rewritten: {claude_alpha}");
+    assert!(!claude_alpha.contains("$beta"));
+    assert!(
+        claude_alpha.contains("echo $HOME/$PATH $1"),
+        "a shell-variable-shaped string is left untouched: {claude_alpha}"
+    );
+
+    let repo2 = TempRepo::new();
+    let path2 = repo2.path();
+    materialize_skills(&path2, Backend::Codex, &skills).unwrap();
+    let codex_alpha = std::fs::read_to_string(path2.join(".agents/skills/alpha/SKILL.md")).unwrap();
+    assert!(codex_alpha.contains("See $beta for details"), "Codex leaves the reference as written: {codex_alpha}");
+    assert!(
+        codex_alpha.contains("echo $HOME/$PATH $1"),
+        "a shell-variable-shaped string is left untouched: {codex_alpha}"
+    );
+}
+
+#[test]
 fn codex_skills_land_under_agents_skills() {
     let repo = TempRepo::new();
     let path = repo.path();

@@ -95,8 +95,8 @@ pub struct CoreRoleDefinition {
 }
 
 /// Given a role name, its definition; nothing else in the crate knows where roles come from
-/// (ticket Architecture). This ticket ships only `role::memory::InMemoryCatalog`, for tests;
-/// F4 adds the plugin-backed implementation.
+/// (ticket Architecture). `role::memory::InMemoryCatalog` is for tests;
+/// `plugin::catalog::PluginCatalog` builds one from a set of loaded plugins.
 pub trait RoleCatalog {
     fn role_names(&self) -> Vec<String>;
     fn role(&self, name: &str) -> Result<&RoleDefinition>;

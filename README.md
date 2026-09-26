@@ -32,6 +32,7 @@ oat-agents meta fire --prompt "…" --repo . --agent claude
 - `AGENTS.md` — how to work in this repository, including the verification commands
 - `.dev_docs/CONTEXT.md` — the vocabulary, including the words not to use
 - `.dev_docs/adr/` — architecture decisions
+- `docs/plugins.md` — writing a plugin: the on-disk format and a worked example
 
 ## License
 

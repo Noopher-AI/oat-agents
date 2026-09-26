@@ -1,0 +1,4 @@
+description = "Starts inside another Dispatch's worktree and carries no execution or verification requirement of its own."
+start = "existing"
+exec_environment = false
+prior_verification = false
