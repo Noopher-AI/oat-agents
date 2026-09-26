@@ -9,6 +9,13 @@ use serde_json::{json, Value};
 #[derive(Subcommand, Debug)]
 pub enum ChecklistCommand {
     Update(UpdateArgs),
+    Show(ShowArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct ShowArgs {
+    #[arg(long)]
+    pub run: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -26,7 +33,17 @@ pub struct UpdateArgs {
 pub fn run(command: ChecklistCommand, env: &dyn Environment) -> Result<Value> {
     match command {
         ChecklistCommand::Update(args) => update(args, env),
+        ChecklistCommand::Show(args) => show(args, env),
     }
+}
+
+/// A read-only view of the current checklist, for the live view's checklist panel and the
+/// console's read-only accessors — neither should have to go through `update` to read state.
+fn show(args: ShowArgs, env: &dyn Environment) -> Result<Value> {
+    let run_id = bound_run(&args.run, env)?;
+    let store = ChecklistStore::open(env);
+    let checklist = store.load(&run_id)?;
+    Ok(json!({"run_id": run_id, "checklist": checklist}))
 }
 
 fn bound_run(run: &Option<String>, env: &dyn Environment) -> Result<String> {

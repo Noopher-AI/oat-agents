@@ -175,3 +175,18 @@ pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]
     append_local_exclude(worktree, &format!("{root_rel}/.oat-manifest.json"))?;
     Ok(())
 }
+
+/// Writes a role's skills under a plain directory that is not a git worktree — the console's
+/// own directory (ADR-0003's "keeps its skills in its own directory under `~/.oat/`"). There is
+/// no repository to conflict with and no local exclude file to update, so this skips both.
+pub fn materialize_skills_plain(dir: &Path, backend: Backend, skills: &[SkillRef]) -> Result<()> {
+    let root_rel = skill_root(backend);
+    for skill in skills {
+        let skill_dir = dir.join(root_rel).join(&skill.name);
+        if skill_dir.exists() {
+            fs::remove_dir_all(&skill_dir).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
+        }
+        write_skill_files(&skill_dir, skill)?;
+    }
+    Ok(())
+}

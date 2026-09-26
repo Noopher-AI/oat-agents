@@ -1,10 +1,12 @@
 pub mod big_plan;
 pub mod checklist;
+pub mod console;
 pub mod dispatch;
 pub mod log;
 pub mod meta;
 pub mod role;
 pub mod run;
+pub mod tui;
 
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};

@@ -52,7 +52,12 @@ pub struct AgentsArgs {
 }
 
 #[derive(Args, Debug)]
-pub struct RunsArgs;
+pub struct RunsArgs {
+    /// Restricts the listing to Runs whose repository matches this path (a console's own
+    /// read-only view, ADR-0005: it observes only its repository's Runs).
+    #[arg(long)]
+    pub repo: Option<std::path::PathBuf>,
+}
 
 fn resolve_run(run: &Option<String>, env: &dyn Environment, store: &Store) -> Result<String> {
     if let Some(r) = run {
@@ -158,11 +163,22 @@ fn agents(args: AgentsArgs, env: &dyn Environment) -> Result<Value> {
     Ok(json!({"run_id": run_id, "agents": agents}))
 }
 
-fn runs(_args: RunsArgs, env: &dyn Environment) -> Result<Value> {
+fn runs(args: RunsArgs, env: &dyn Environment) -> Result<Value> {
     let store = Store::open(env)?;
+    let repo_filter = args
+        .repo
+        .as_ref()
+        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()));
     let mut runs = Vec::new();
     for id in store.list_run_ids()? {
         let record = store.load_run(&id)?;
+        if let Some(repo) = &repo_filter {
+            let run_repo = std::path::PathBuf::from(&record.repo);
+            let run_repo = run_repo.canonicalize().unwrap_or(run_repo);
+            if &run_repo != repo {
+                continue;
+            }
+        }
         runs.push(json!({"run_id": id, "open": record.is_open()}));
     }
     Ok(json!({"runs": runs}))
