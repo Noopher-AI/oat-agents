@@ -130,7 +130,7 @@ pub fn execute_with_exec(
     // `.oat/plugins.toml` and its snapshot (F5). `_catalog` stays part of the signature so
     // existing callers (and every test built against it) do not have to change.
     match cli.command {
-        TopCommand::Meta { command } => commands::meta::run(command, env),
+        TopCommand::Meta { command } => commands::meta::run(command, env, exec),
         TopCommand::Role { command } => commands::role::run(command, env, exec),
         TopCommand::Run { command } => commands::run::run(command, env),
         TopCommand::Dispatch { command } => commands::dispatch::run(command, env),

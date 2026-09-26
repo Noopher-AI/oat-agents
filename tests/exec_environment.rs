@@ -61,6 +61,11 @@ impl ExecEnvironments for FakeExec {
     fn reusable(&self, _environment: &dyn Environment, _worktree: &Path, _against: &EnvRecord) -> serde_json::Value {
         self.reusable.clone()
     }
+
+    fn remove_run(&self, _environment: &dyn Environment, _log: &EventLog, run_id: &str) -> serde_json::Value {
+        self.calls.lock().unwrap().push(format!("remove_run:{run_id}"));
+        serde_json::json!({"removed": [self.record.env_id], "failed": []})
+    }
 }
 
 fn write_exec_profile(repo: &Path, home: &Path) {
@@ -231,6 +236,21 @@ fn exec_environment_false_never_gets_prior_verification_either() {
     let prompt = std::fs::read_to_string(dispatch_dir.join("prompt.md")).unwrap();
     assert!(!prompt.contains("Prior verification"), "{prompt}");
     assert!(fake.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn meta_finish_removes_the_runs_environments_and_reports_them() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    write_exec_profile(&repo.path(), &world.home);
+    let run_id = fire_run(&world, &repo.path(), true, false);
+
+    let fake = FakeExec::new();
+    let finish = parse(&["meta", "finish", "--run", &run_id]);
+    let receipt = execute_with_exec(finish, &world.env(), &catalog_with(true, false), &fake).unwrap();
+
+    assert_eq!(fake.calls.lock().unwrap().as_slice(), [format!("remove_run:{run_id}")]);
+    assert_eq!(receipt["environments"]["removed"], serde_json::json!(["oat-fake-worker-1"]), "{receipt}");
 }
 
 #[test]
