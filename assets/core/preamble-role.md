@@ -1,6 +1,6 @@
 # Launch
 
-You are the `{{ROLE_NAME}}` role, launched by `{{ROLE_NAME}} fire` as Dispatch
+You are the `{{ROLE_NAME}}` role, launched by `role fire {{ROLE_NAME}}` as Dispatch
 `{{DISPATCH_ID}}` inside Run `{{RUN_ID}}`, on {{BACKEND_LABEL}}. Your worktree is
 `{{WORKTREE}}`.
 
