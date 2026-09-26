@@ -466,7 +466,7 @@ impl<'a> App<'a> {
                 let entries = self.log.read_run(&run_id).unwrap_or_default();
                 entries
                     .iter()
-                    .filter(|e| e.agent.as_deref() == Some(dispatch.role.as_str()))
+                    .filter(|e| e.dispatch_id.as_deref() == Some(dispatch.id.as_str()))
                     .map(|e| format!("{} {} {}", e.timestamp, e.event, e.agent.clone().unwrap_or_default()))
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -762,16 +762,18 @@ mod tests {
     }
 
     #[test]
-    fn log_tab_shows_only_the_selected_agents_log_entries() {
+    fn log_tab_shows_only_the_selected_dispatchs_log_entries() {
         let fx = build_fixture();
-        // A run-level entry with no agent, and another agent's entry, must not leak into the
-        // selected agent's Log tab (ticket Scope: "its log", not the whole Run's log).
+        // A run-level entry with no agent, and a second Dispatch of the *same* role
+        // ("worker") — the shape a correction round creates in one Run — must not leak into
+        // the selected Dispatch's Log tab (ticket Scope: "its log", not the whole Run's log,
+        // nor every Dispatch sharing its role).
         fx.log
             .record(&LogEntry {
                 timestamp: now_iso(),
                 run_id: "run-a-open".to_string(),
                 dispatch_id: Some("dispatch-2".to_string()),
-                agent: Some("reviewer".to_string()),
+                agent: Some("worker".to_string()),
                 event: events::AGENT_EXIT.to_string(),
                 details: None,
             })
@@ -785,8 +787,10 @@ mod tests {
         assert!(text.contains(events::AGENT_ENTER), "{text}");
         assert!(text.contains("worker"), "{text}");
         assert!(!text.contains(events::NEEDS_HUMAN), "{text} (a Run-level entry with no agent leaked in)");
-        assert!(!text.contains("reviewer"), "{text} (another agent's entry leaked in)");
-        assert!(!text.contains(events::AGENT_EXIT), "{text} (another agent's entry leaked in)");
+        assert!(
+            !text.contains(events::AGENT_EXIT),
+            "{text} (another Dispatch of the same role leaked in)"
+        );
     }
 
     #[test]

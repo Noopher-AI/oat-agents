@@ -124,6 +124,35 @@ fn opening_a_console_delivers_the_core_system_view_skill_even_when_the_catalog_d
 }
 
 #[test]
+fn the_consoles_own_system_view_cross_reference_is_rewritten_per_backend() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    let catalog = catalog_with_console_instructions("team instructions");
+
+    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    let claude_dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
+    let claude_prompt = std::fs::read_to_string(claude_dir.join("prompt.md")).unwrap();
+    assert!(
+        claude_prompt.contains("oat-system-view"),
+        "the skill cross-reference is rewritten to a plain name for Claude Code: {claude_prompt}"
+    );
+    assert!(!claude_prompt.contains("$oat-system-view"));
+
+    let world_codex = TestWorld::new();
+    let env_codex = world_codex.env();
+    let repo_codex = tempfile::tempdir().unwrap();
+    oat_agents::console::open(&env_codex, &catalog, repo_codex.path(), Backend::Codex).unwrap();
+    let codex_dir =
+        oat_agents::console::console_dir(&env_codex, &repo_codex.path().canonicalize().unwrap()).unwrap();
+    let codex_prompt = std::fs::read_to_string(codex_dir.join("prompt.md")).unwrap();
+    assert!(
+        codex_prompt.contains("$oat-system-view"),
+        "the skill cross-reference is left as written for Codex: {codex_prompt}"
+    );
+}
+
+#[test]
 fn two_consoles_opened_from_two_repositories_get_two_directories() {
     let world = TestWorld::new();
     let env = world.env();

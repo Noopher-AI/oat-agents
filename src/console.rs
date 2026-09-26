@@ -10,6 +10,7 @@ use crate::session::tmux::Tmux;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -107,6 +108,7 @@ pub fn open(
 
     let mut console_skills = core_role.skills.clone();
     console_skills.push(skills::oat_system_view_skill());
+    let known_skills: BTreeSet<String> = console_skills.iter().map(|s| s.name.clone()).collect();
     skills::materialize_skills_plain(&dir, backend, &console_skills)?;
 
     let repo_label = repo.to_string_lossy().to_string();
@@ -121,6 +123,7 @@ pub fn open(
             task: "",
         },
         backend,
+        &known_skills,
     );
 
     fs::write(dir.join("prompt.md"), &full_prompt)?;

@@ -196,12 +196,13 @@ pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]
 /// no repository to conflict with and no local exclude file to update, so this skips both.
 pub fn materialize_skills_plain(dir: &Path, backend: Backend, skills: &[SkillRef]) -> Result<()> {
     let root_rel = skill_root(backend);
+    let known_skills: BTreeSet<String> = skills.iter().map(|s| s.name.clone()).collect();
     for skill in skills {
         let skill_dir = dir.join(root_rel).join(&skill.name);
         if skill_dir.exists() {
             fs::remove_dir_all(&skill_dir).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
         }
-        write_skill_files(&skill_dir, skill)?;
+        write_skill_files(&skill_dir, skill, backend, &known_skills)?;
     }
     Ok(())
 }
