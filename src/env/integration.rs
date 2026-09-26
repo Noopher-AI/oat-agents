@@ -30,6 +30,11 @@ pub trait ExecEnvironments {
     /// The ledger's reusable entries for this worktree, judged against the environment a role
     /// is about to run in.
     fn reusable(&self, environment: &dyn Environment, worktree: &Path, against: &EnvRecord) -> Value;
+
+    /// Removes every environment registered to a Run, as it closes. Reports what it removed
+    /// and what it could not, rather than failing: a cluster that is unreachable must not keep
+    /// a Run from finishing.
+    fn remove_run(&self, environment: &dyn Environment, log: &EventLog, run_id: &str) -> Value;
 }
 
 /// The real implementation: creates a Kubernetes-backed environment and reads the on-disk
@@ -57,5 +62,9 @@ impl ExecEnvironments for LiveExecEnvironments {
         let now: Fingerprint = fingerprint::of(worktree, fingerprint::Limits::default());
         let entries = store.ledgers_for_worktree(worktree, None);
         super::commands::classify(&entries, &now, against)
+    }
+
+    fn remove_run(&self, environment: &dyn Environment, log: &EventLog, run_id: &str) -> Value {
+        super::commands::tear_down_run(environment, log, run_id)
     }
 }

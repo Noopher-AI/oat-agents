@@ -276,6 +276,23 @@ pub fn tear_down(environment: &dyn Environment, log: &EventLog, record: &EnvReco
     result
 }
 
+/// Tears down every environment registered to `run_id`, continuing past one that fails so a
+/// single unreachable pod does not leave the rest running.
+pub fn tear_down_run(environment: &dyn Environment, log: &EventLog, run_id: &str) -> Value {
+    let Ok(store) = EnvStore::open(environment) else {
+        return json!({ "removed": [], "failed": [] });
+    };
+    let mut removed = Vec::new();
+    let mut failed = Vec::new();
+    for record in store.list().into_iter().filter(|record| record.run_id.as_deref() == Some(run_id)) {
+        match tear_down(environment, log, &record) {
+            Ok(()) => removed.push(record.env_id.clone()),
+            Err(error) => failed.push(json!({ "env_id": record.env_id, "pod": record.pod, "error": format!("{error:#}") })),
+        }
+    }
+    json!({ "removed": removed, "failed": failed })
+}
+
 pub fn ledger_summary(environment: &dyn Environment, env_id: &str) -> Value {
     match EnvStore::open(environment) {
         Ok(store) => store.ledger_summary(env_id),

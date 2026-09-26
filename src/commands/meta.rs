@@ -1,5 +1,6 @@
 use super::generate_id;
 use super::run::clean_run;
+use crate::env::integration::ExecEnvironments;
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
@@ -50,10 +51,10 @@ pub struct FinishArgs {
     pub run: Option<String>,
 }
 
-pub fn run(command: MetaCommand, env: &dyn Environment) -> Result<Value> {
+pub fn run(command: MetaCommand, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     match command {
         MetaCommand::Fire(args) => fire(args, env),
-        MetaCommand::Finish(args) => finish(args, env),
+        MetaCommand::Finish(args) => finish(args, env, exec),
     }
 }
 
@@ -203,7 +204,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     }))
 }
 
-fn finish(args: FinishArgs, env: &dyn Environment) -> Result<Value> {
+fn finish(args: FinishArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     let run_id = args
         .run
         .or_else(|| env.var("OAT_RUN_ID"))
@@ -248,10 +249,13 @@ fn finish(args: FinishArgs, env: &dyn Environment) -> Result<Value> {
     })?;
 
     let cleanup = clean_run(env, &store, &run_id, false)?;
+    // A closed Run has no Dispatch left to run a command in, so its pods are only cost.
+    let environments = exec.remove_run(env, &log, &run_id);
     let receipt = json!({
         "run_id": run_id,
         "closed_at": run_record.closed_at,
         "cleanup": cleanup,
+        "environments": environments,
     });
 
     // The receipt above is what settles the Run; killing the coordinator's own tmux session

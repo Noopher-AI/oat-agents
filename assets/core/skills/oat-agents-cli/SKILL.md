@@ -58,7 +58,8 @@ you are stepping in:
   Dispatch's session; `--remove-worktree` also removes its worktree, subject to the same
   terms as `run clean` (kept, with a reason, if it is not clean). This is not free: a
   released Dispatch's worktree is gone, along with anything in it nobody committed.
-- `meta finish --run <id>` — closes the Run, prints its receipt, and cleans up.
+- `meta finish --run <id>` — closes the Run, prints its receipt, removes the Run's execution
+  environments (pods), and cleans up.
 - `run clean --run <id> | --all --force` — removes every settled Run's remaining worktrees;
   fails with `run_still_open` on a Run that has not been finished yet.
 

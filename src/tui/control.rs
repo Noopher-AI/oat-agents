@@ -62,6 +62,7 @@ impl Control for RealControl<'_> {
                 run: Some(run_id.to_string()),
             }),
             self.env,
+            &crate::env::integration::LiveExecEnvironments,
         )?;
         Ok(())
     }
