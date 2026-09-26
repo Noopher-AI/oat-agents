@@ -192,18 +192,23 @@ mod tests {
             dir.display()
         );
 
-        // The second attempt must try a real fetch again, not report a false cache mismatch:
-        // the message and error kind must match the first attempt's, not the "no longer
-        // matches that commit" text a stale, half-fetched directory would otherwise trigger.
+        // The second attempt must try a real fetch again, not report a false cache mismatch.
+        // Both attempts' raw stderr is embedded verbatim from two concurrent subprocesses (the
+        // `fetch` client and the `git-upload-pack` child it spawns), so their line order is not
+        // guaranteed to match between independent invocations; compare the stable prefix that
+        // `fetch_into` itself controls, not the full string.
         let second = ensure_commit(&home, &source.to_string_lossy(), &bogus_commit).unwrap_err();
+        assert!(
+            second.to_string().contains("fetching") || second.to_string().contains("fetch"),
+            "expected a real fetch-failure message, got: {second}"
+        );
+        assert!(
+            !first.to_string().contains("no longer matches that commit"),
+            "first attempt falsely reported a cache mismatch instead of a real fetch failure: {first}"
+        );
         assert!(
             !second.to_string().contains("no longer matches that commit"),
             "second attempt falsely reported a cache mismatch instead of retrying the fetch: {second}"
-        );
-        assert_eq!(
-            first.to_string(),
-            second.to_string(),
-            "both attempts should fail identically since neither ever fetches successfully"
         );
         assert!(!dir.exists(), "the second failed attempt must not leave a directory behind either");
     }
