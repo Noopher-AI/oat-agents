@@ -1,0 +1,110 @@
+pub mod checklist;
+pub mod commands;
+pub mod environment;
+pub mod error;
+pub mod event_log;
+pub mod launch;
+pub mod liveness;
+pub mod pricing;
+pub mod role;
+pub mod session;
+pub mod store;
+pub mod transcript;
+pub mod usage;
+pub mod worktree;
+
+use clap::{Parser, Subcommand};
+use environment::Environment;
+use error::{codes, err};
+use role::RoleCatalog;
+use serde_json::Value;
+
+#[derive(Parser, Debug)]
+#[command(name = "oat-agents", version, about = "Runs a supervised team of coding agents on one machine")]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: TopCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TopCommand {
+    /// The coordinator's own lifecycle.
+    Meta {
+        #[command(subcommand)]
+        command: commands::meta::MetaCommand,
+    },
+    /// Launching a non-core role.
+    Role {
+        #[command(subcommand)]
+        command: commands::role::RoleCommand,
+    },
+    /// Run-level lifecycle: the Run inbox and cleanup.
+    Run {
+        #[command(subcommand)]
+        command: commands::run::RunCommand,
+    },
+    /// One Dispatch's settlement and observation.
+    Dispatch {
+        #[command(subcommand)]
+        command: commands::dispatch::DispatchCommand,
+    },
+    /// The workflow log.
+    Log {
+        #[command(subcommand)]
+        command: commands::log::LogCommand,
+    },
+    /// The Big Plan a Run was fired with.
+    BigPlan {
+        #[command(subcommand)]
+        command: commands::big_plan::BigPlanCommand,
+    },
+    /// The Run's checklist.
+    Checklist {
+        #[command(subcommand)]
+        command: commands::checklist::ChecklistCommand,
+    },
+}
+
+/// Exactly one of `--prompt` or `--input-file` is required across several commands; this
+/// resolves that pair once instead of repeating the check.
+pub fn resolve_text_input(prompt: &Option<String>, input_file: &Option<std::path::PathBuf>) -> anyhow::Result<String> {
+    match (prompt, input_file) {
+        (Some(p), None) => Ok(p.clone()),
+        (None, Some(path)) => std::fs::read_to_string(path)
+            .map_err(|e| err(codes::INVALID_INPUT, format!("could not read {}: {e}", path.display()))),
+        (Some(_), Some(_)) => Err(err(
+            codes::INVALID_CLI_ARGUMENTS,
+            "pass exactly one of --prompt or --input-file",
+        )),
+        (None, None) => Err(err(
+            codes::INVALID_CLI_ARGUMENTS,
+            "pass exactly one of --prompt or --input-file",
+        )),
+    }
+}
+
+/// The one testable entry point: every command's logic runs through here against an injected
+/// `Environment` and `RoleCatalog`, so a test never needs a real model, a real home directory,
+/// or a real plugin source.
+pub fn execute(cli: Cli, env: &dyn Environment, catalog: &dyn RoleCatalog) -> anyhow::Result<Value> {
+    match cli.command {
+        TopCommand::Meta { command } => commands::meta::run(command, env, catalog),
+        TopCommand::Role { command } => commands::role::run(command, env, catalog),
+        TopCommand::Run { command } => commands::run::run(command, env),
+        TopCommand::Dispatch { command } => commands::dispatch::run(command, env),
+        TopCommand::Log { command } => commands::log::run(command, env),
+        TopCommand::BigPlan { command } => commands::big_plan::run(command, env),
+        TopCommand::Checklist { command } => commands::checklist::run(command, env),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn cli_definition_is_internally_consistent() {
+        Cli::command().debug_assert();
+    }
+}

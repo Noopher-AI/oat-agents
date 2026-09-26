@@ -11,11 +11,25 @@ operator's system console. Every other role, and the skills they use, comes from
 
 ## Status
 
-This repository is being bootstrapped. **There is no code yet, on purpose**: the first
-feature ticket brings it in, so that ticket's review shows whether this skeleton was
-followed. Until then the repository holds only its ground rules:
+The core lifecycle is in place: Runs, Dispatches, the Run inbox, the workflow log, git
+worktrees and tmux sessions, and generic role launches through a `RoleCatalog` seam. The core
+ships only `oat-meta`'s launch in this ticket; reading plugins from disk, the live view and
+`oat-console`, and execution environments are later tickets (see `.dev_docs/adr/`).
 
-- `AGENTS.md` — how to work in this repository
+Build and install:
+
+```sh
+cargo build --release --locked
+./install.sh                       # installs oat-agents and its human-facing skill
+```
+
+Start a Run (once a plugin source exists to supply roles — F4/F5):
+
+```sh
+oat-agents meta fire --prompt "…" --repo . --agent claude
+```
+
+- `AGENTS.md` — how to work in this repository, including the verification commands
 - `.dev_docs/CONTEXT.md` — the vocabulary, including the words not to use
 - `.dev_docs/adr/` — architecture decisions
 
