@@ -32,7 +32,11 @@ is a new Dispatch), and conflating them loses which attempt said what.
 
 **hash_id**
 The stable identifier of one agent execution, `<role>-<4 hex>-<name>`, quoted in every log
-line about it.
+line about it. `<name>` is what the Dispatch is for — its `role fire --name`, or the branch of
+the worktree it starts in — and the Run's name only for the coordinator and for a launch that
+named nothing.
+*Avoid*: deriving a hash_id anywhere but from the Dispatch's record — a copy that uses a
+different name looks for a session that does not exist.
 
 **Settle**
 What an agent does to end its own Dispatch with an outcome and a report. A Dispatch that is

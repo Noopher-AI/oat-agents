@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 pub struct LaunchSpec {
     pub run: RunRecord,
     pub role_label: String,
+    /// What the Dispatch is for, the last part of its hash_id; `None` names it after the Run.
+    pub name: Option<String>,
     pub is_core: bool,
     pub worktree: PathBuf,
     pub branch: String,
@@ -154,7 +156,7 @@ pub fn launch_dispatch(
 
     let hid = hash_id(
         if spec.is_core { "meta" } else { &spec.role_label },
-        &spec.run.name,
+        spec.name.as_deref().unwrap_or(&spec.run.name),
         &dispatch_id,
     );
     let session = Tmux::session_name(&hid);
@@ -202,7 +204,9 @@ pub fn launch_dispatch(
         settled: None,
         report: None,
         released_at: None,
+        name: spec.name.clone(),
     };
+    debug_assert_eq!(dispatch.hash_id(&spec.run), hid);
     store.create_dispatch(&dispatch)?;
 
     log.record(&LogEntry {

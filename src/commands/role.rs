@@ -140,6 +140,7 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
     let spec = LaunchSpec {
         run: run_record.clone(),
         role_label: args.role.clone(),
+        name: dispatch_name(&args.role, args.name.as_deref(), (!created_fresh).then_some(branch.as_str())),
         is_core: false,
         worktree: worktree_path.clone(),
         branch: branch.clone(),
@@ -227,6 +228,31 @@ impl EnvBinding {
 /// name, not what the Run happens to be doing. A role that says `false` never gets one, even
 /// when the Run carries a profile; a role that says `true` gets one only when the Run actually
 /// has a profile to give it.
+/// The longest a Dispatch's name gets in its hash_id, so the roster keeps a column for it.
+const NAME_MAX: usize = 32;
+
+/// What a Dispatch is called in its hash_id: the `--name` it was launched with, or, for one
+/// that starts in an existing worktree, that worktree's branch. The role is already the
+/// hash_id's first part, so a name that repeats it at either end drops it — `s3-f8-worker`
+/// launched as a worker is `worker-1a2b-s3-f8`. `None` when there is nothing to go on.
+fn dispatch_name(role: &str, name: Option<&str>, branch: Option<&str>) -> Option<String> {
+    let raw = name.or_else(|| branch.map(|branch| branch.rsplit('/').next().unwrap_or(branch)))?;
+    let mut name = worktree::sanitize_segment(raw);
+    let role = worktree::sanitize_segment(role);
+    let trimmed = name
+        .strip_suffix(&format!("-{role}"))
+        .or_else(|| name.strip_prefix(&format!("{role}-")))
+        .map(str::to_owned);
+    if let Some(trimmed) = trimmed {
+        name = trimmed;
+    }
+    if name.len() > NAME_MAX {
+        name.truncate(NAME_MAX);
+        name = name.trim_end_matches('-').to_owned();
+    }
+    Some(name).filter(|name| !name.is_empty() && name != "run")
+}
+
 fn bring_up_environment(
     env: &dyn Environment,
     log: &crate::event_log::EventLog,
@@ -270,4 +296,27 @@ fn render_prior_verification_block(record: &crate::env::EnvRecord, reusable: &Va
         record.env_id,
         serde_json::to_string_pretty(reusable).unwrap_or_else(|_| "null".to_string())
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dispatch_name;
+
+    #[test]
+    fn a_dispatch_is_named_for_its_work_without_repeating_its_role() {
+        assert_eq!(dispatch_name("worker", Some("s3-f10-worker"), None).as_deref(), Some("s3-f10"));
+        assert_eq!(dispatch_name("worker", Some("s3-f7-fix1"), None).as_deref(), Some("s3-f7-fix1"));
+        assert_eq!(dispatch_name("reviewer", Some("reviewer-S3 F8"), None).as_deref(), Some("s3-f8"));
+        assert_eq!(dispatch_name("worker", Some("worker"), None).as_deref(), Some("worker"));
+    }
+
+    #[test]
+    fn an_unnamed_dispatch_in_an_existing_worktree_takes_its_branch() {
+        assert_eq!(
+            dispatch_name("reviewer", None, Some("feature/S3-97-mac-shell-windows-print-links"))
+                .as_deref(),
+            Some("s3-97-mac-shell-windows-print-li")
+        );
+        assert_eq!(dispatch_name("worker", None, None), None, "then it is known by the Run's name");
+    }
 }

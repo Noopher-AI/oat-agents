@@ -184,6 +184,7 @@ fn fixture() -> Fixture {
         settled: None,
         report: None,
         released_at: None,
+        name: None,
     };
     store.create_dispatch(&meta).unwrap();
     store

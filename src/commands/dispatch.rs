@@ -213,7 +213,7 @@ fn show(args: ShowArgs, env: &dyn Environment) -> Result<Value> {
         false
     } else {
         let tmux = Tmux::from_env(env);
-        let hid = crate::event_log::hash_id(&dispatch.role, &run_record.name, &dispatch_id);
+        let hid = dispatch.hash_id(&run_record);
         let session = Tmux::session_name(&hid);
         tmux.session_alive(&session).unwrap_or(false)
     };
@@ -231,7 +231,7 @@ fn read(args: ReadArgs, env: &dyn Environment) -> Result<Value> {
     let run_record = store.load_run(&run_id)?;
     let dispatch = store.load_dispatch(&run_id, &dispatch_id)?;
 
-    let hid = crate::event_log::hash_id(&dispatch.role, &run_record.name, &dispatch_id);
+    let hid = dispatch.hash_id(&run_record);
     let session = Tmux::session_name(&hid);
     let tmux = Tmux::from_env(env);
 
@@ -271,7 +271,7 @@ fn release(args: ReleaseArgs, env: &dyn Environment) -> Result<Value> {
     let mut dispatch = store.load_dispatch(&run_id, &dispatch_id)?;
 
     let tmux = Tmux::from_env(env);
-    let hid = crate::event_log::hash_id(&dispatch.role, &run_record.name, &dispatch_id);
+    let hid = dispatch.hash_id(&run_record);
     let session = Tmux::session_name(&hid);
 
     if tmux.session_alive(&session).unwrap_or(false) {

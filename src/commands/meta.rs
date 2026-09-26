@@ -167,6 +167,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     let spec = LaunchSpec {
         run: run_record.clone(),
         role_label: CoreRole::Meta.name().to_string(),
+        name: None,
         is_core: true,
         worktree: path.clone(),
         branch: branch.clone(),

@@ -4,7 +4,10 @@ The Run inbox is authoritative. Never infer progress from commits, files or term
 only from a delivery `run wait` hands you.
 
 Delegate bounded work with `role fire <role>`, using the role names this Run's preamble
-listed. Wait for the Run inbox with one long `run wait` per checkpoint rather than polling it
+listed. Give every launch `--name`: a short slug for the piece of work it serves, such as
+`s3-f8-links`, not the role and not the Run, which its hash_id already carries. Keep the same
+name for that work's correction rounds and its review, so the live view shows which
+Dispatches belong together. Wait for the Run inbox with one long `run wait` per checkpoint rather than polling it
 yourself; when it times out, it carries a liveness report for every still-active Dispatch —
 `working`, `waiting` or `stalled`, how long each has been silent, and whether that silence has
 outlasted the kind of work it is doing. Decide from that whether to keep waiting, and act

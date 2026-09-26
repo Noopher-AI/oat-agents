@@ -264,12 +264,7 @@ fn load_dispatches(store: &Store, run_id: &str) -> Vec<DispatchRecord> {
 /// The Dispatch's hash_id, derived the way the launch derived it: the coordinator's under
 /// `meta`, every other role's under its own name.
 pub fn dispatch_hash(run: &RunRecord, dispatch: &DispatchRecord) -> String {
-    let label = if dispatch.role == CoreRole::Meta.name() {
-        "meta"
-    } else {
-        dispatch.role.as_str()
-    };
-    crate::event_log::hash_id(label, &run.name, &dispatch.id)
+    dispatch.hash_id(run)
 }
 
 fn event_row(entry: &LogEntry, hashes: &HashMap<String, String>) -> Value {

@@ -71,11 +71,28 @@ pub struct DispatchRecord {
     pub report: Option<String>,
     #[serde(default)]
     pub released_at: Option<String>,
+    /// What this Dispatch is for, as `role fire --name` gave it: the last part of its
+    /// hash_id. `None` for the coordinator, and for a launch that named nothing, which are
+    /// then known by the Run's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 impl DispatchRecord {
     pub fn is_settled(&self) -> bool {
         self.settled.is_some()
+    }
+
+    /// Its hash_id: the coordinator's under `meta`, every other role's under its own name,
+    /// then what it was launched for. Every place that finds a Dispatch's session derives it
+    /// here, so they cannot disagree.
+    pub fn hash_id(&self, run: &RunRecord) -> String {
+        let label = if self.role == crate::role::CoreRole::Meta.name() {
+            "meta"
+        } else {
+            self.role.as_str()
+        };
+        crate::event_log::hash_id(label, self.name.as_deref().unwrap_or(&run.name), &self.id)
     }
 }
 
@@ -497,5 +514,26 @@ mod tests {
         ];
         store.create_run(&with_plugins).unwrap();
         assert_eq!(store.load_run("r2").unwrap().plugins.len(), 2);
+    }
+
+    #[test]
+    fn a_dispatch_is_known_by_its_name_and_one_recorded_without_one_by_its_runs() {
+        let run: RunRecord = serde_json::from_value(serde_json::json!({
+            "id": "s3", "name": "s3-format-v6-parity", "repo": "/tmp/repo", "base_branch": "main",
+            "backend": "claude", "created_at": "2026-01-01T00:00:00.000000000Z",
+        }))
+        .unwrap();
+        // A record written before Dispatches had names: its session keeps the name it has.
+        let old: DispatchRecord = serde_json::from_value(serde_json::json!({
+            "id": "dispatch-1", "run_id": "s3", "role": "worker", "backend": "claude",
+            "worktree": "/tmp/w", "branch": "oat/s3/w", "created_at": "2026-01-01T00:00:00Z",
+        }))
+        .unwrap();
+        assert_eq!(old.hash_id(&run), crate::event_log::hash_id("worker", "s3-format-v6-parity", "dispatch-1"));
+
+        let named = DispatchRecord { name: Some("s3-f8".to_string()), ..old.clone() };
+        assert!(named.hash_id(&run).starts_with("worker-") && named.hash_id(&run).ends_with("-s3-f8"));
+        let meta = DispatchRecord { role: "oat-meta".to_string(), ..old };
+        assert!(meta.hash_id(&run).starts_with("meta-"));
     }
 }
