@@ -158,6 +158,14 @@ impl PluginBuilder {
         self
     }
 
+    /// Writes `core/<slug>.toml` as given, replacing any written by `core_with`.
+    pub fn core_toml(self, slug: &str, contents: &str) -> Self {
+        let core_dir = self.dir.join("core");
+        std::fs::create_dir_all(&core_dir).unwrap();
+        std::fs::write(core_dir.join(format!("{slug}.toml")), contents).unwrap();
+        self
+    }
+
     pub fn skill(self, name: &str, files: &[(&str, &[u8], bool)]) -> Self {
         let skill_dir = self.dir.join("skills").join(name);
         std::fs::create_dir_all(&skill_dir).unwrap();

@@ -223,11 +223,11 @@ fn the_console_launch_is_gated_exactly_like_meta_fire() {
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
 
-    let error = oat_agents::console::open(&env, repo.path(), oat_agents::role::Backend::Claude).unwrap_err();
+    let error = oat_agents::console::open(&env, repo.path(), Some(oat_agents::role::Backend::Claude)).unwrap_err();
     assert_eq!(to_failure(&error).code, codes::PLUGIN_UNINITIALISED);
 
     common::install_console_plugin(&world, repo.path(), "team instructions");
     // Trust granted by `install_console_plugin`'s `finish`; the console now opens.
-    let record = oat_agents::console::open(&env, repo.path(), oat_agents::role::Backend::Claude).unwrap();
+    let record = oat_agents::console::open(&env, repo.path(), Some(oat_agents::role::Backend::Claude)).unwrap();
     assert_eq!(record.backend, "claude");
 }

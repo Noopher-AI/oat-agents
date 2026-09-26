@@ -83,7 +83,11 @@ fn render_baseline(repo: &str) -> String {
 /// (naming this repository and the prohibitions ADR-0004/ADR-0005 require), and the catalog's
 /// instructions — in that order — and starts its session. Reopening a console whose session is
 /// still alive is a no-op that returns the existing record.
-pub fn open(env: &dyn Environment, repo: &Path, backend: Backend) -> Result<ConsoleRecord> {
+///
+/// The console runs on the backend the repository's plugins choose in `core/oat-console.toml`;
+/// `requested` is used only when no plugin chooses one, and one that contradicts a plugin's
+/// choice is refused rather than silently overridden either way. With neither, Claude Code.
+pub fn open(env: &dyn Environment, repo: &Path, requested: Option<Backend>) -> Result<ConsoleRecord> {
     let repo = repo
         .canonicalize()
         .map_err(|e| err(codes::INVALID_INPUT, format!("invalid --repo: {e}")))?;
@@ -108,6 +112,20 @@ pub fn open(env: &dyn Environment, repo: &Path, backend: Backend) -> Result<Cons
     let catalog = &catalog;
 
     let core_role = catalog.core_role(CoreRole::Console)?;
+    let backend = match (core_role.backend, requested) {
+        (Some(chosen), Some(asked)) if chosen != asked => {
+            return Err(err(
+                codes::INVALID_INPUT,
+                format!(
+                    "this repository's plugins run oat-console on {}; it cannot be opened on {}",
+                    chosen.label(),
+                    asked.label()
+                ),
+            ))
+        }
+        (Some(chosen), _) => chosen,
+        (None, asked) => asked.unwrap_or(Backend::Claude),
+    };
     let model = core_role.models.get(&backend).cloned().unwrap_or_default();
 
     let mut console_skills = core_role.skills.clone();

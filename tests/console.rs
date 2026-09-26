@@ -10,7 +10,7 @@ fn the_consoles_prompt_carries_the_catalogs_instructions_after_its_baseline() {
     let repo = tempfile::tempdir().unwrap();
     common::install_console_plugin(&world, repo.path(), "Watch spend and flag anything over budget.");
 
-    let record = oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
+    let record = oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap();
     assert_eq!(record.backend, "claude");
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
@@ -40,7 +40,7 @@ fn a_skill_with_a_script_lands_in_the_consoles_directory_with_the_script_executa
         )
         .finish(&world, repo.path(), "fixture-plugin", "fixture-plugin");
 
-    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap();
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let script = dir.join(".claude/skills/team-skill/check.sh");
@@ -61,7 +61,7 @@ fn the_console_baseline_prohibits_the_inbox_release_teardown_and_interactive_pan
     let repo = tempfile::tempdir().unwrap();
     common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap();
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let prompt = std::fs::read_to_string(dir.join("prompt.md")).unwrap().to_lowercase();
 
@@ -81,7 +81,7 @@ fn opening_a_console_delivers_the_core_system_view_skill_even_when_the_catalog_d
     let repo = tempfile::tempdir().unwrap();
     common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap();
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let skill_file = dir.join(".claude/skills/oat-system-view/SKILL.md");
@@ -97,7 +97,7 @@ fn the_consoles_own_system_view_cross_reference_is_rewritten_per_backend() {
     let repo = tempfile::tempdir().unwrap();
     common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap();
     let claude_dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let claude_prompt = std::fs::read_to_string(claude_dir.join("prompt.md")).unwrap();
     assert!(
@@ -110,7 +110,7 @@ fn the_consoles_own_system_view_cross_reference_is_rewritten_per_backend() {
     let env_codex = world_codex.env();
     let repo_codex = tempfile::tempdir().unwrap();
     common::install_console_plugin(&world_codex, repo_codex.path(), "team instructions");
-    oat_agents::console::open(&env_codex, repo_codex.path(), Backend::Codex).unwrap();
+    oat_agents::console::open(&env_codex, repo_codex.path(), Some(Backend::Codex)).unwrap();
     let codex_dir =
         oat_agents::console::console_dir(&env_codex, &repo_codex.path().canonicalize().unwrap()).unwrap();
     let codex_prompt = std::fs::read_to_string(codex_dir.join("prompt.md")).unwrap();
@@ -129,8 +129,8 @@ fn two_consoles_opened_from_two_repositories_get_two_directories() {
     common::install_console_plugin(&world, repo_a.path(), "team instructions");
     common::install_console_plugin(&world, repo_b.path(), "team instructions");
 
-    oat_agents::console::open(&env, repo_a.path(), Backend::Claude).unwrap();
-    oat_agents::console::open(&env, repo_b.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo_a.path(), Some(Backend::Claude)).unwrap();
+    oat_agents::console::open(&env, repo_b.path(), Some(Backend::Claude)).unwrap();
 
     let dir_a = oat_agents::console::console_dir(&env, &repo_a.path().canonicalize().unwrap()).unwrap();
     let dir_b = oat_agents::console::console_dir(&env, &repo_b.path().canonicalize().unwrap()).unwrap();
@@ -196,4 +196,56 @@ fn each_repositorys_read_only_run_listing_only_shows_its_own_runs() {
     let runs_b = result_b["runs"].as_array().unwrap();
     assert_eq!(runs_b.len(), 1);
     assert_eq!(runs_b[0]["run_id"], "run-b");
+}
+
+fn console_on(world: &TestWorld, repo: &std::path::Path, console_toml: &str) {
+    PluginBuilder::new(repo, "fixture-plugin", "fixture-plugin")
+        .core("oat-meta", "Coordinate.")
+        .core("oat-console", "team instructions")
+        .core_toml("oat-console", console_toml)
+        .finish(world, repo, "fixture-plugin", "fixture-plugin");
+}
+
+#[test]
+fn the_console_runs_on_the_backend_its_plugin_chooses() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    console_on(&world, repo.path(), "backend = \"codex\"\n");
+
+    let record = oat_agents::console::open(&env, repo.path(), None).unwrap();
+    assert_eq!(record.backend, "codex");
+    let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
+    let script = std::fs::read_to_string(dir.join("launch.sh")).unwrap();
+    assert!(script.contains("OAT_CODEX_COMMAND"), "{script}");
+}
+
+#[test]
+fn a_backend_that_contradicts_the_plugins_choice_is_refused() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    console_on(&world, repo.path(), "backend = \"codex\"\n");
+
+    let error = oat_agents::console::open(&env, repo.path(), Some(Backend::Claude)).unwrap_err();
+    assert!(error.to_string().contains("Codex"), "{error}");
+    oat_agents::console::open(&env, repo.path(), Some(Backend::Codex)).unwrap();
+}
+
+#[test]
+fn without_a_plugins_choice_the_console_takes_the_request_or_claude_code() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    common::install_console_plugin(&world, repo.path(), "team instructions");
+    assert_eq!(oat_agents::console::open(&env, repo.path(), None).unwrap().backend, "claude");
+
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    common::install_console_plugin(&world, repo.path(), "team instructions");
+    assert_eq!(
+        oat_agents::console::open(&env, repo.path(), Some(Backend::Codex)).unwrap().backend,
+        "codex"
+    );
 }

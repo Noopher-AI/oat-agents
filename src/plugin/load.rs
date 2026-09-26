@@ -7,7 +7,7 @@ use super::format::{
     PluginManifest, RoleToml, StartLocationToml, SUPPORTED_FORMAT_VERSION,
 };
 use super::PluginError;
-use crate::role::{Backend, ModelSetting, SkillFile, SkillRef, StartLocation};
+use crate::role::{Backend, CoreRole, ModelSetting, SkillFile, SkillRef, StartLocation};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,7 @@ pub struct LoadedCoreRole {
     pub instructions: String,
     pub skills: Vec<SkillRef>,
     pub models: BTreeMap<Backend, ModelSetting>,
+    pub backend: Option<Backend>,
 }
 
 #[derive(Debug, Clone)]
@@ -352,11 +353,37 @@ fn load_core_role(
 
     let resolved_skills = resolve_skills(dir, &toml_file, &core_toml.skills, skills, errors);
     let models = convert_models(dir, &toml_file, core_toml.model, errors);
+    let backend = match core_toml.backend.as_deref() {
+        None => None,
+        Some(_) if slug != CoreRole::Console.name() => {
+            errors.push(PluginError::new(
+                dir,
+                &toml_file,
+                format!(
+                    "{toml_file} sets `backend`, which only core/oat-console.toml may set; \
+                     oat-meta runs on the Run's backend, chosen by `meta fire --agent`"
+                ),
+            ));
+            None
+        }
+        Some(name) => match Backend::from_str(name) {
+            Ok(backend) => Some(backend),
+            Err(_) => {
+                errors.push(PluginError::new(
+                    dir,
+                    &toml_file,
+                    format!("unknown backend '{name}' in {toml_file}; expected claude or codex"),
+                ));
+                None
+            }
+        },
+    };
 
     Some(LoadedCoreRole {
         instructions,
         skills: resolved_skills,
         models,
+        backend,
     })
 }
 

@@ -110,6 +110,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                backend: None,
             },
         )
         .with_core_role(
@@ -118,6 +119,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
                 instructions: "Observe the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                backend: None,
             },
         )
         .build()

@@ -122,6 +122,19 @@ skills = ["sample-skill"]
 model = "sample-claude-meta-model"
 ```
 
+`core/oat-console.toml` may also choose the backend the console runs on:
+
+```toml
+backend = "codex"   # or "claude"
+```
+
+A console is opened from no command that could choose one, so the repository's plugins do. When
+none chooses, `oat-agents console open --agent <backend>` picks it, and with no `--agent`
+either it is Claude Code; asking for a backend the plugins did not choose is refused rather than
+silently obeyed or ignored. `core/oat-meta.toml` may not set `backend`: `oat-meta` runs on the
+Run's backend, chosen by `meta fire --agent`. Two plugins choosing the console's backend is a
+conflict like any other.
+
 ## Validation
 
 Loading a plugin never stops at the first problem: every malformed file, every missing file and

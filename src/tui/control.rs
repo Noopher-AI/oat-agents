@@ -55,8 +55,9 @@ pub trait Control {
     fn diff_stat(&self, worktree: &Path, base: &str) -> Result<(u32, u32)>;
     /// Whether `repo`'s console has a live session to show right now.
     fn console_live(&self, repo: &Path) -> bool;
-    /// Opens `repo`'s console, creating it on first use; reopening a live one is a no-op.
-    fn console(&self, repo: &Path, backend: &str) -> Result<ConsoleHandle>;
+    /// Opens `repo`'s console, creating it on first use on the backend its plugins choose;
+    /// reopening a live one is a no-op.
+    fn console(&self, repo: &Path) -> Result<ConsoleHandle>;
     /// Stops `repo`'s console session. Returns what happened, in a phrase.
     fn stop_console(&self, repo: &Path) -> Result<String>;
 }
@@ -151,8 +152,8 @@ impl Control for RealControl<'_> {
         matches!(crate::console::status(self.env, repo), Ok(Some((_, true))))
     }
 
-    fn console(&self, repo: &Path, backend: &str) -> Result<ConsoleHandle> {
-        let record = crate::console::open(self.env, repo, backend.parse()?)?;
+    fn console(&self, repo: &Path) -> Result<ConsoleHandle> {
+        let record = crate::console::open(self.env, repo, None)?;
         let dir = repo
             .canonicalize()
             .ok()

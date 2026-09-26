@@ -34,6 +34,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                backend: None,
             },
         )
         .with_core_role(
@@ -42,6 +43,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
                 instructions: "Observe the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                backend: None,
             },
         )
         .build()
@@ -150,6 +152,7 @@ fn role_fire_defaults_to_the_run_s_recorded_backend() {
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                backend: None,
             },
         )
         .build();
