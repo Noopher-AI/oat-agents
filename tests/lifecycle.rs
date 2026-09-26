@@ -61,6 +61,7 @@ fn run_json(cli: Cli, env: &dyn oat_agents::environment::Environment, catalog: &
 fn meta_fire_creates_a_run_a_worktree_and_a_session() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -100,6 +101,7 @@ fn meta_fire_creates_a_run_a_worktree_and_a_session() {
 fn fresh_role_gets_its_own_child_worktree() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -123,6 +125,7 @@ fn fresh_role_gets_its_own_child_worktree() {
 fn role_fire_defaults_to_the_run_s_recorded_backend() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = InMemoryCatalogBuilder::new()
         .with_role(RoleDefinition {
@@ -185,6 +188,7 @@ fn role_fire_defaults_to_the_run_s_recorded_backend() {
 fn existing_role_runs_in_the_named_worktree() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -208,6 +212,7 @@ fn existing_role_runs_in_the_named_worktree() {
 fn from_is_refused_for_a_fresh_role() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -230,6 +235,7 @@ fn from_is_refused_for_a_fresh_role() {
 fn from_is_required_for_an_existing_role() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -249,6 +255,7 @@ fn from_is_required_for_an_existing_role() {
 fn unknown_role_names_the_role_and_the_known_ones() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -272,6 +279,7 @@ fn unknown_role_names_the_role_and_the_known_ones() {
 fn a_silent_role_still_gets_the_preamble_and_the_protocol_before_its_instructions() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 
@@ -302,6 +310,7 @@ fn a_silent_role_still_gets_the_preamble_and_the_protocol_before_its_instruction
 fn a_run_goes_from_delegation_to_finish() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
     let env = world.env();
     let catalog = fixture_catalog();
 

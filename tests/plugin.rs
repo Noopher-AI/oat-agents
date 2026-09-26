@@ -114,6 +114,25 @@ fn the_fixture_plugin_s_properties_reach_a_real_launch() {
     let env = world.env();
     let (catalog, _) = load_catalog(&sample_plugin_dirs()).unwrap();
 
+    // F5's gate: `meta fire`/`role fire` now build their real catalog from `.oat/plugins.toml`,
+    // not from the `catalog` fixture above (kept only because `execute` still takes one). Both
+    // fixture plugins are copied into the repository, since a path pin only ever points inside
+    // it, then pinned and trusted.
+    let mut pins = Vec::new();
+    for (dest, source) in [
+        ("sample-plugin", fixtures_dir().join("sample-plugin")),
+        ("sample-plugin-secondary", fixtures_dir().join("sample-plugin-secondary")),
+    ] {
+        common::copy_dir_all(&source, &repo.path().join(dest));
+    }
+    pins.push(oat_agents::plugins::path_pin_from_current_content(&repo.path(), "sample-plugin", "sample-plugin").unwrap());
+    pins.push(
+        oat_agents::plugins::path_pin_from_current_content(&repo.path(), "sample-plugin-secondary", "sample-plugin-secondary")
+            .unwrap(),
+    );
+    common::write_plugins_config(&repo.path(), &pins);
+    common::trust_pins(&world, &pins);
+
     let fire = parse(&[
         "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(),
         "--name", "fixture-run", "--agent", "claude",

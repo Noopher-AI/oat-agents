@@ -200,6 +200,7 @@ pub mod events {
     pub const ENV_DESTROYED: &str = "env_destroyed";
     pub const ENV_IMAGE_BUILT: &str = "env_image_built";
     pub const ENV_REAPED: &str = "env_reaped";
+    pub const PLUGINS_RESOLVED: &str = "plugins_resolved";
 }
 
 /// Milliseconds since the epoch, for the execution ledger's timestamps.

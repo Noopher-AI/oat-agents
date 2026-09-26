@@ -143,6 +143,13 @@ impl Store {
         self.run_dir(run_id).join("inbox")
     }
 
+    /// Where a Run's plugin snapshot lives (F5's Architecture: "the plugin trees are copied
+    /// into the Run's ... state directory"). Every later catalog for this Run is built from
+    /// here, never by re-resolving `.oat/plugins.toml`.
+    pub fn run_plugin_snapshot_dir(&self, run_id: &str) -> PathBuf {
+        self.run_dir(run_id).join("plugins")
+    }
+
     pub fn create_run(&self, run: &RunRecord) -> Result<()> {
         let dir = self.run_dir(&run.id);
         fs::create_dir_all(&dir)?;

@@ -5,6 +5,7 @@ use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::now_iso;
 use crate::launch::{self, prompt, skills};
+use crate::plugins;
 use crate::role::{Backend, CoreRole, RoleCatalog};
 use crate::session::tmux::Tmux;
 use anyhow::Result;
@@ -82,12 +83,7 @@ fn render_baseline(repo: &str) -> String {
 /// (naming this repository and the prohibitions ADR-0004/ADR-0005 require), and the catalog's
 /// instructions — in that order — and starts its session. Reopening a console whose session is
 /// still alive is a no-op that returns the existing record.
-pub fn open(
-    env: &dyn Environment,
-    catalog: &dyn RoleCatalog,
-    repo: &Path,
-    backend: Backend,
-) -> Result<ConsoleRecord> {
+pub fn open(env: &dyn Environment, repo: &Path, backend: Backend) -> Result<ConsoleRecord> {
     let repo = repo
         .canonicalize()
         .map_err(|e| err(codes::INVALID_INPUT, format!("invalid --repo: {e}")))?;
@@ -102,6 +98,14 @@ pub fn open(
             return Ok(record);
         }
     }
+
+    // The console gate (ADR-0005, ticket Scope): the same uninitialised-repository and
+    // untrusted-plugin gates as `meta fire`, and a catalog built from a snapshot of the
+    // repository's plugins rather than read live from it on every use.
+    let (resolved, _catalog) = plugins::gate(&repo, env)?;
+    plugins::snapshot::snapshot_plugins(&resolved, &dir.join("plugins"))?;
+    let catalog = plugins::snapshot::catalog_from_snapshot(&dir.join("plugins"))?;
+    let catalog = &catalog;
 
     let core_role = catalog.core_role(CoreRole::Console)?;
     let model = core_role.models.get(&backend).cloned().unwrap_or_default();
