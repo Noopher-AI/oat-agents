@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 use ratatui::crossterm::event::{
-    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEventKind,
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind,
 };
 use ratatui::crossterm::event::{
     DisableBracketedPaste, EnableBracketedPaste, KeyboardEnhancementFlags,
@@ -261,6 +261,12 @@ pub struct TuiState {
     pub(super) preview: Option<Preview>,
     /// The size the preview box was last drawn at, so the pane can follow.
     pub(super) preview_area: Option<(u16, u16)>,
+    /// Where on the terminal that box's top-left cell was, for the mouse.
+    pub(super) preview_origin: Option<(u16, u16)>,
+    /// Where in the box the left button went down, until it comes up.
+    pressed: Option<(u16, u16)>,
+    /// The button moved while down, so a selection is being made.
+    dragged: bool,
     pub(super) diff: Option<DiffReport>,
     sessions: HashMap<String, SessionInfo>,
     /// The Run the operator is about to close, awaiting a yes.
@@ -311,6 +317,9 @@ impl TuiState {
             notice: None,
             preview: None,
             preview_area: None,
+            preview_origin: None,
+            pressed: None,
+            dragged: false,
             diff: None,
             sessions: HashMap::new(),
             closing: false,
@@ -950,6 +959,8 @@ impl TuiState {
     fn close_detail(&mut self) {
         self.view = View::Overview;
         self.typing = false;
+        self.pressed = None;
+        self.dragged = false;
         self.preview = None;
         self.preview_area = None;
         self.diff = None;
@@ -1103,6 +1114,12 @@ impl TuiState {
                 None => self.typing = false,
             }
         }
+        if self.tab == Tab::Live
+            && self.preview.as_ref().is_some_and(Preview::selecting_with_keys)
+            && self.on_select_key(key, control)
+        {
+            return Action::Continue;
+        }
         let page = self.viewport.max(1) as isize;
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
         let on_preview = self.tab == Tab::Live;
@@ -1114,6 +1131,7 @@ impl TuiState {
             // Esc first leaves the history, then the page; backspace and
             // left leave the page outright.
             KeyCode::Esc => match self.preview.as_mut() {
+                Some(preview) if preview.has_selection() => preview.clear_selection(),
                 Some(preview) if preview.scrolling() => preview.leave_scroll(),
                 _ => self.close_detail(),
             },
@@ -1136,6 +1154,7 @@ impl TuiState {
                 self.start_typing();
             }
             KeyCode::Char('x') => self.ask_to_close(),
+            KeyCode::Char('v') if on_preview => self.begin_select(control),
             KeyCode::Up | KeyCode::Down if on_preview && shift => {
                 self.preview_scroll(control, if key.code == KeyCode::Up { -1 } else { 1 });
             }
@@ -1171,6 +1190,139 @@ impl TuiState {
             preview.enter_scroll(control, viewport);
         }
         preview.scroll(delta);
+    }
+
+    /// `v` on the live tab: reading back, with a cursor the keys move to
+    /// pick out text.
+    fn begin_select(&mut self, control: &dyn Control) {
+        self.preview_scroll(control, 0);
+        if let Some(preview) = self.preview.as_mut() {
+            preview.begin_select();
+        }
+    }
+
+    /// The keys while selecting with them; `false` leaves a key to the page.
+    fn on_select_key(&mut self, key: KeyEvent, control: &dyn Control) -> bool {
+        let page = self
+            .preview_area
+            .map(|(_, rows)| rows as isize)
+            .unwrap_or(self.viewport as isize)
+            .max(1);
+        let Some(preview) = self.preview.as_mut() else {
+            return false;
+        };
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => preview.move_cursor(-1, 0),
+            KeyCode::Down | KeyCode::Char('j') => preview.move_cursor(1, 0),
+            KeyCode::Left | KeyCode::Char('h') => preview.move_cursor(0, -1),
+            KeyCode::Right | KeyCode::Char('l') => preview.move_cursor(0, 1),
+            KeyCode::PageUp => preview.move_cursor(-page, 0),
+            KeyCode::PageDown => preview.move_cursor(page, 0),
+            KeyCode::Char('g') => preview.move_cursor(isize::MIN / 2, 0),
+            KeyCode::Char('G') => preview.move_cursor(isize::MAX / 2, 0),
+            KeyCode::Home | KeyCode::Char('0') => preview.cursor_to_edge(false),
+            KeyCode::End | KeyCode::Char('$') => preview.cursor_to_edge(true),
+            KeyCode::Char('v') | KeyCode::Char(' ') => preview.toggle_mark(),
+            KeyCode::Char('y') | KeyCode::Enter => {
+                self.copy_selection(control);
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.clear_selection();
+                }
+            }
+            // Esc puts the selection down and stays reading back.
+            KeyCode::Esc => preview.clear_selection(),
+            _ => return false,
+        }
+        true
+    }
+
+    /// Puts what is selected on the operator's clipboard, and says so.
+    fn copy_selection(&mut self, control: &dyn Control) {
+        let Some(text) = self.preview.as_ref().and_then(Preview::selected_text) else {
+            return;
+        };
+        if text.trim().is_empty() {
+            self.notice = Some(Notice::new("nothing to copy there"));
+            return;
+        }
+        let lines = text.lines().count();
+        self.notice = Some(match control.copy(&text) {
+            Ok(()) => Notice::new(format!(
+                "copied {lines} line{}",
+                if lines == 1 { "" } else { "s" }
+            )),
+            Err(error) => Notice::alarm(format!("copying failed: {error}")),
+        });
+    }
+
+    /// Where a terminal cell falls in the live box, when it does.
+    fn in_preview(&self, column: u16, row: u16) -> Option<(u16, u16)> {
+        if self.view != View::Detail || self.tab != Tab::Live || self.preview.is_none() {
+            return None;
+        }
+        let ((x, y), (cols, rows)) = (self.preview_origin?, self.preview_area?);
+        (column >= x && column < x + cols && row >= y && row < y + rows)
+            .then(|| (column - x, row - y))
+    }
+
+    /// The left button went down: on the live box it may start a selection,
+    /// and it puts down the one before.
+    pub fn on_press(&mut self, column: u16, row: u16) {
+        self.pressed = self.in_preview(column, row);
+        self.dragged = false;
+        if self.pressed.is_some() {
+            if let Some(preview) = self.preview.as_mut() {
+                preview.clear_selection();
+            }
+        }
+    }
+
+    /// The button moved while down: the first move stops the screen and
+    /// starts selecting where the button went down. Past the box's top or
+    /// bottom edge, the history moves under the pointer.
+    pub fn on_drag(&mut self, column: u16, row: u16, control: &dyn Control) {
+        let (Some((from_col, from_row)), Some((x, y)), Some((cols, rows))) =
+            (self.pressed, self.preview_origin, self.preview_area)
+        else {
+            return;
+        };
+        if cols == 0 || rows == 0 {
+            return;
+        }
+        if !self.dragged {
+            self.dragged = true;
+            self.preview_scroll(control, 0);
+            if let Some(preview) = self.preview.as_mut() {
+                if let Some(at) = preview.point_at(from_row, from_col) {
+                    preview.select_from(at);
+                }
+            }
+        }
+        let Some(preview) = self.preview.as_mut() else {
+            return;
+        };
+        let row = if row < y {
+            preview.scroll(-1);
+            0
+        } else if row >= y + rows {
+            preview.scroll(1);
+            rows - 1
+        } else {
+            row - y
+        };
+        let col = column.saturating_sub(x).min(cols - 1);
+        if let Some(at) = preview.point_at(row, col) {
+            preview.select_to(at);
+        }
+    }
+
+    /// The button came up: a drag has selected something, which is copied
+    /// straight away and stays marked until the next click or esc.
+    pub fn on_release(&mut self, control: &dyn Control) {
+        let dragged = std::mem::take(&mut self.dragged);
+        if self.pressed.take().is_some() && dragged {
+            self.copy_selection(control);
+        }
     }
 
     /// Text the terminal delivered in one piece: the agent's, while typing.
@@ -1311,14 +1463,23 @@ impl TuiState {
                 if self.tabs().len() > 1 {
                     first.push(item("tab", format!("tab:{}", self.tab.label())));
                 }
+                let keys = self.preview.as_ref().is_some_and(Preview::selecting_with_keys);
                 match self.tab {
+                    Tab::Live if keys => {
+                        first.push(item("↑↓←→", "move"));
+                        first.push(item("v", "mark"));
+                        first.push(item("y", "copy"));
+                        first.push(item("esc", "cancel"));
+                    }
                     Tab::Live if scrolling => {
                         first.push(item("↑↓/PgUp/PgDn", "history"));
+                        first.push(item("v/drag", "select"));
                         first.push(item("esc", "exit scroll"));
                     }
                     Tab::Live => {
                         first.push(item("enter", "type"));
                         first.push(item("shift+↑↓", "scroll back"));
+                        first.push(item("v/drag", "select"));
                     }
                     _ => {
                         first.push(item("↑↓", "scroll"));
@@ -1637,14 +1798,15 @@ pub fn run(env: &dyn Environment) -> Result<()> {
 
 type Tui = Terminal<CrosstermBackend<Stdout>>;
 
-/// Reports mouse buttons, the wheel among them, in SGR form (DECSET 1000 and
+/// Reports mouse buttons, the wheel among them, in SGR form (DECSET 1002 and
 /// 1006). The wheel has to arrive as a wheel: turned into arrow keys, as
 /// "alternate scroll" does, it would be typed at the agent on the live tab
-/// instead of scrolling it. Only buttons are reported, not motion, so
-/// moving the mouse costs nothing. Most terminals still select text with
-/// Shift held down.
-const MOUSE_REPORTING_ON: &str = "\x1b[?1000h\x1b[?1006h";
-const MOUSE_REPORTING_OFF: &str = "\x1b[?1006l\x1b[?1000l";
+/// instead of scrolling it. Motion is reported only while a button is held,
+/// which is what a drag across the live screen selects with; moving the
+/// mouse otherwise costs nothing. Most terminals still select text their own
+/// way with Shift held down.
+const MOUSE_REPORTING_ON: &str = "\x1b[?1002h\x1b[?1006h";
+const MOUSE_REPORTING_OFF: &str = "\x1b[?1006l\x1b[?1002l";
 
 /// Whether the terminal was asked to report keys the way the prompt box
 /// wants them. Remembered rather than asked twice: by the time the view is
@@ -1931,6 +2093,20 @@ fn event_loop(
                 Event::Paste(text) => {
                     if let Some(state) = open.as_mut() {
                         state.on_paste(&text, control);
+                    }
+                }
+                Event::Mouse(mouse) if !checklist_panel.is_open() && open.is_some() => {
+                    let state = open.as_mut().expect("checked above");
+                    let (column, row) = (mouse.column, mouse.row);
+                    match mouse.kind {
+                        MouseEventKind::ScrollUp => state.on_scroll(true, control),
+                        MouseEventKind::ScrollDown => state.on_scroll(false, control),
+                        MouseEventKind::Down(MouseButton::Left) => state.on_press(column, row),
+                        MouseEventKind::Drag(MouseButton::Left) => {
+                            state.on_drag(column, row, control)
+                        }
+                        MouseEventKind::Up(MouseButton::Left) => state.on_release(control),
+                        _ => {}
                     }
                 }
                 Event::Mouse(mouse) => {

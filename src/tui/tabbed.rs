@@ -72,6 +72,7 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
     let block = pane(&plain_title, true);
     let inner = block.inner(area);
     state.preview_area = Some((inner.width, inner.height));
+    state.preview_origin = Some((inner.x, inner.y));
     let Some(preview) = state.preview.as_mut() else {
         frame.render_widget(
             Paragraph::new(Line::from(Span::styled(
@@ -83,9 +84,17 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
         );
         return;
     };
+    let keys = preview.selecting_with_keys();
     let (title, bottom) = match preview.scroll_position() {
         Some((first, total)) => (
-            title_of(state, "live · scroll (esc exits)"),
+            title_of(
+                state,
+                if keys {
+                    "live · select (v marks, y copies, esc leaves)"
+                } else {
+                    "live · scroll (esc exits)"
+                },
+            ),
             format!(
                 " {first}-{} of {total} ",
                 (first + inner.height as usize).saturating_sub(1).min(total)
@@ -97,6 +106,7 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
         ),
         None => (title_of(state, "live · enter to type"), String::new()),
     };
+    let typing = state.typing();
     let preview = state.preview.as_mut().expect("checked above");
     let mut lines = preview.window(inner.height as usize);
     if let Some(error) = preview.error() {
@@ -105,10 +115,37 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
             Style::new().fg(Color::Red),
         )));
     }
-    // The agent's own cursor, so it is plain where the next key lands.
-    let cursor = preview.cursor().filter(|_| state.typing());
+    // The agent's own cursor, so it is plain where the next key lands; while
+    // selecting with the keys, theirs.
+    let cursor = preview
+        .cursor()
+        .filter(|_| typing)
+        .or(preview.select_cursor());
+    let selection = preview.selection_range().zip(preview.offset());
     let block = pane(&title, true).title_bottom(Line::from(bottom).right_aligned());
     frame.render_widget(Paragraph::new(lines).block(block), area);
+    // What is selected reads reversed, cell by cell, the way a terminal
+    // shows its own selection.
+    if let Some(((start, end), offset)) = selection {
+        let buffer = frame.buffer_mut();
+        for row in 0..inner.height {
+            let line = offset + row as usize;
+            if line < start.line || line > end.line {
+                continue;
+            }
+            let from = if line == start.line { start.col } else { 0 };
+            let to = if line == end.line {
+                end.col + 1
+            } else {
+                inner.width as usize
+            };
+            for col in from..to.min(inner.width as usize) {
+                if let Some(cell) = buffer.cell_mut((inner.x + col as u16, inner.y + row)) {
+                    cell.set_style(Style::new().add_modifier(Modifier::REVERSED));
+                }
+            }
+        }
+    }
     if let Some((x, y)) = cursor {
         if x < inner.width && y < inner.height {
             frame.set_cursor_position((inner.x + x, inner.y + y));

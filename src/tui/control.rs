@@ -60,6 +60,8 @@ pub trait Control {
     fn console(&self, repo: &Path) -> Result<ConsoleHandle>;
     /// Stops `repo`'s console session. Returns what happened, in a phrase.
     fn stop_console(&self, repo: &Path) -> Result<String>;
+    /// Puts text selected on a live screen on the operator's clipboard.
+    fn copy(&self, text: &str) -> Result<()>;
 }
 
 pub struct RealControl<'a> {
@@ -171,4 +173,56 @@ impl Control for RealControl<'_> {
         let record = crate::console::stop(self.env, repo)?;
         Ok(format!("stopped {}", record.session))
     }
+
+    /// Through the terminal the view is drawn in (OSC 52), which reaches the operator's own
+    /// clipboard even over ssh. Inside the operator's tmux, whose default is to ignore that
+    /// from a program, tmux's own buffer is set as well, and tmux passes it on.
+    fn copy(&self, text: &str) -> Result<()> {
+        use std::io::Write;
+        if self.env.var("TMUX").is_some_and(|tmux| !tmux.is_empty()) {
+            let _ = load_operator_buffer(text);
+        }
+        let mut stdout = std::io::stdout();
+        write!(stdout, "\x1b]52;c;{}\x07", base64(text.as_bytes()))?;
+        stdout.flush()?;
+        Ok(())
+    }
+}
+
+/// `tmux load-buffer -w`, on the operator's own tmux (the one `$TMUX` names, not the private
+/// server the agents run on): `-w` hands the buffer on to the terminal's clipboard too.
+fn load_operator_buffer(text: &str) -> Result<()> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("tmux")
+        .args(["load-buffer", "-w", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(text.as_bytes())?;
+    }
+    child.wait()?;
+    Ok(())
+}
+
+/// Standard base64 with padding, the form OSC 52 carries.
+pub fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk
+            .iter()
+            .enumerate()
+            .fold(0u32, |n, (at, byte)| n | ((*byte as u32) << (16 - 8 * at)));
+        for at in 0..4 {
+            if at <= chunk.len() {
+                out.push(ALPHABET[((n >> (18 - 6 * at)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }

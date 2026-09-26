@@ -115,6 +115,11 @@ impl Control for RecordingControl {
         self.record(format!("stop_console {}", repo.display()));
         Ok("stopped".to_string())
     }
+
+    fn copy(&self, text: &str) -> Result<()> {
+        self.record(format!("copy {text:?}"));
+        Ok(())
+    }
 }
 
 struct Fixture {
@@ -580,4 +585,112 @@ fn the_console_key_opens_the_repository_the_view_was_started_in() {
 
     assert!(is_console_toggle(&ctrl('\\')));
     assert!(is_console_toggle(&key(KeyCode::F(2))));
+}
+
+/// Where `needle` is drawn on a screen from `screen`, as a terminal cell.
+fn cell_of(text: &str, needle: &str) -> (u16, u16) {
+    text.lines()
+        .enumerate()
+        .find_map(|(row, line)| {
+            let at = line.find(needle)?;
+            Some((line[..at].chars().count() as u16, row as u16))
+        })
+        .unwrap_or_else(|| panic!("{needle:?} is not on screen:\n{text}"))
+}
+
+/// A worker's page open on its live screen, drawn once so the box is placed.
+fn watching_worker(fx: &Fixture, screen_text: &str) -> (TuiState, RecordingControl, String) {
+    let session = fx.session_of("worker");
+    let mut control = RecordingControl::default();
+    control.alive.insert(session.clone());
+    control.screens.insert(session.clone(), screen_text.to_string());
+    let mut state = fx.state();
+    state.refresh_sessions(&control);
+    select(&mut state, "worker");
+    state.open_detail(&control);
+    state.refresh_preview(&control);
+    let text = screen(120, 30, |frame| draw(frame, &mut state));
+    (state, control, text)
+}
+
+#[test]
+fn dragging_across_the_live_screen_copies_what_it_crossed_without_moving_the_screen() {
+    let fx = fixture();
+    let (mut state, control, text) =
+        watching_worker(&fx, "$ cargo test\nrunning 3 tests ... ok\ntest result: ok");
+    let (from_col, from_row) = cell_of(&text, "cargo test");
+    let (to_col, to_row) = cell_of(&text, "3 tests");
+
+    state.on_press(from_col, from_row);
+    state.on_drag(to_col, to_row, &control);
+    state.on_release(&control);
+
+    assert!(
+        control.calls().contains(&"copy \"cargo test\\nrunning 3\"".to_string()),
+        "{:?}",
+        control.calls()
+    );
+    assert_eq!(state.notice(), Some("copied 2 lines"));
+    let after = screen(120, 30, |frame| draw(frame, &mut state));
+    assert_eq!(
+        cell_of(&after, "running 3"),
+        cell_of(&text, "running 3"),
+        "reading back starts where the live screen stood:\n{after}"
+    );
+    assert!(after.contains("live · scroll"), "{after}");
+
+    // A click is not a drag: it puts the selection down and copies nothing.
+    state.on_press(from_col, from_row);
+    state.on_release(&control);
+    assert!(!state.preview.as_ref().unwrap().has_selection());
+    assert_eq!(control.calls().iter().filter(|call| call.starts_with("copy ")).count(), 1);
+}
+
+#[test]
+fn v_selects_with_the_keys_and_y_copies() {
+    let fx = fixture();
+    let (mut state, control, _) =
+        watching_worker(&fx, "$ cargo test\nrunning 3 tests ... ok\ntest result: ok");
+
+    state.on_key_with(key(KeyCode::Char('v')), &control);
+    let text = screen(120, 30, |frame| draw(frame, &mut state));
+    assert!(text.contains("live · select"), "{text}");
+    assert!(text.contains("y copy"), "{text}");
+
+    // The cursor starts on the newest line: up one, mark, then across to the end of "running".
+    state.on_key_with(key(KeyCode::Up), &control);
+    state.on_key_with(key(KeyCode::Char('v')), &control);
+    for _ in 0..6 {
+        state.on_key_with(key(KeyCode::Right), &control);
+    }
+    // The arrows moved the cursor rather than leaving the page.
+    assert_eq!(state.view(), View::Detail);
+    state.on_key_with(key(KeyCode::Char('y')), &control);
+    assert!(
+        control.calls().contains(&"copy \"running\"".to_string()),
+        "{:?}",
+        control.calls()
+    );
+    assert!(!state.preview.as_ref().unwrap().selecting_with_keys());
+    assert!(
+        !control.calls().iter().any(|call| call.starts_with("type ")),
+        "selecting never types at the agent: {:?}",
+        control.calls()
+    );
+
+    // With nothing marked, y takes the cursor's whole line; esc then leaves reading back.
+    state.on_key_with(key(KeyCode::Char('v')), &control);
+    state.on_key_with(key(KeyCode::Char('y')), &control);
+    assert!(control.calls().contains(&"copy \"test result: ok\"".to_string()), "{:?}", control.calls());
+    state.on_key_with(key(KeyCode::Esc), &control);
+    assert!(!state.preview.as_ref().unwrap().scrolling());
+}
+
+#[test]
+fn a_copy_reaches_the_terminal_as_base64() {
+    assert_eq!(control::base64(b""), "");
+    assert_eq!(control::base64(b"f"), "Zg==");
+    assert_eq!(control::base64(b"fo"), "Zm8=");
+    assert_eq!(control::base64(b"foo"), "Zm9v");
+    assert_eq!(control::base64("選取".as_bytes()), "6YG45Y+W");
 }
