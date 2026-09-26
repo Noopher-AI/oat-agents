@@ -159,16 +159,108 @@ impl Tmux {
     }
 
     /// Resizes a session's window, so the live tab's pane matches the live view's pane size.
+    /// The window is pinned to that size first, or tmux sizes it back to whichever client is
+    /// attached.
     pub fn resize_window(&self, session: &str, cols: u16, rows: u16) -> Result<()> {
-        let mut args = self.base_args();
-        args.push("resize-window".to_string());
-        args.push("-t".to_string());
-        args.push(session.to_string());
-        args.push("-x".to_string());
-        args.push(cols.to_string());
-        args.push("-y".to_string());
-        args.push(rows.to_string());
-        let _ = self.run(&args)?;
+        let target = pane(session);
+        self.checked(&["set-option", "-t", &target, "window-size", "manual"])?;
+        let cols = cols.max(20).to_string();
+        let rows = rows.max(5).to_string();
+        self.checked(&["resize-window", "-t", &target, "-x", &cols, "-y", &rows])?;
         Ok(())
     }
+
+    /// The visible screen with its colours (SGR escapes), as tmux draws it — the live tab's
+    /// view of a session.
+    pub fn capture(&self, session: &str) -> Result<String> {
+        self.capture_with(session, &[])
+    }
+
+    /// The whole scrollback plus the screen, with colours, for reading back on the live tab.
+    pub fn capture_history(&self, session: &str) -> Result<String> {
+        self.capture_with(session, &["-S", "-", "-E", "-"])
+    }
+
+    fn capture_with(&self, session: &str, range: &[&str]) -> Result<String> {
+        let target = pane(session);
+        let mut args = vec!["capture-pane", "-p", "-e", "-J", "-t", &target];
+        args.extend_from_slice(range);
+        let output = self.checked(&args)?;
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    /// Pastes `text` into the session as one bracketed paste, without pressing Enter: what a
+    /// terminal does when a person pastes.
+    pub fn paste(&self, session: &str, text: &str) -> Result<()> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut args = self.base_args();
+        args.extend(["load-buffer", "-b", "oat", "-"].map(String::from));
+        let mut child = Command::new(&self.command)
+            .args(&args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| err(codes::TMUX_MISSING, format!("could not run '{}': {e}", self.command)))?;
+        if let Some(mut stdin) = child.stdin.take() {
+            stdin.write_all(text.as_bytes())?;
+        }
+        let output = child.wait_with_output()?;
+        if !output.status.success() {
+            return Err(failed("load-buffer", &output));
+        }
+        self.checked(&["paste-buffer", "-p", "-d", "-b", "oat", "-t", &pane(session)])?;
+        Ok(())
+    }
+
+    /// Whether the program in the session is on the alternate screen, and whether it asked
+    /// for mouse reports — which decide who scrolls it.
+    pub fn screen_mode(&self, session: &str) -> Option<(bool, bool)> {
+        let text = self.display(
+            session,
+            "#{alternate_on} #{?#{||:#{mouse_any_flag},#{||:#{mouse_button_flag},#{mouse_standard_flag}}},1,0}",
+        )?;
+        let mut fields = text.split_whitespace();
+        Some((fields.next()? == "1", fields.next()? == "1"))
+    }
+
+    /// Where the session's cursor is, when the program in it shows one.
+    pub fn cursor(&self, session: &str) -> Option<(u16, u16)> {
+        let text = self.display(session, "#{cursor_x} #{cursor_y} #{cursor_flag}")?;
+        let mut fields = text.split_whitespace();
+        let x = fields.next()?.parse().ok()?;
+        let y = fields.next()?.parse().ok()?;
+        (fields.next()? == "1").then_some((x, y))
+    }
+
+    fn display(&self, session: &str, format: &str) -> Option<String> {
+        let output = self
+            .checked(&["display-message", "-p", "-t", &pane(session), format])
+            .ok()?;
+        Some(String::from_utf8_lossy(&output.stdout).into_owned())
+    }
+
+    fn checked(&self, args: &[&str]) -> Result<std::process::Output> {
+        let mut all = self.base_args();
+        all.extend(args.iter().map(|arg| arg.to_string()));
+        let output = self.run(&all)?;
+        if !output.status.success() {
+            return Err(failed(args.first().copied().unwrap_or("tmux"), &output));
+        }
+        Ok(output)
+    }
+}
+
+/// `=name:` targets exactly that session's pane: without the `=` tmux matches a prefix, and
+/// without the colon a pane command reads the whole string as a pane name.
+fn pane(session: &str) -> String {
+    format!("={session}:")
+}
+
+fn failed(what: &str, output: &std::process::Output) -> anyhow::Error {
+    err(
+        codes::INTERNAL_ERROR,
+        format!("tmux {what} failed: {}", String::from_utf8_lossy(&output.stderr).trim()),
+    )
 }

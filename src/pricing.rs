@@ -118,6 +118,16 @@ impl Usage {
         total
     }
 
+    pub fn merge(&mut self, other: &Usage) {
+        for (model, tokens) in &other.by_model {
+            self.add(model, tokens);
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_model.iter().all(|(_, tokens)| tokens.is_empty())
+    }
+
     pub fn cost(&self) -> Option<f64> {
         let mut total = 0.0;
         let mut any = false;
@@ -128,6 +138,29 @@ impl Usage {
             }
         }
         any.then_some(total)
+    }
+}
+
+/// Token counts at a glance: `934k`, `1.2M`.
+pub fn human_tokens(tokens: u64) -> String {
+    match tokens {
+        0 => "-".to_string(),
+        1..=9_999 => format!("{tokens}"),
+        10_000..=999_999 => format!("{}k", tokens / 1_000),
+        _ => format!("{:.1}M", tokens as f64 / 1_000_000.0),
+    }
+}
+
+/// Money at a glance, never rounded to a misleading zero.
+pub fn human_money(dollars: f64) -> String {
+    if dollars >= 100.0 {
+        format!("${dollars:.0}")
+    } else if dollars >= 1.0 {
+        format!("${dollars:.2}")
+    } else if dollars > 0.0 {
+        format!("${dollars:.3}")
+    } else {
+        "$0".to_string()
     }
 }
 

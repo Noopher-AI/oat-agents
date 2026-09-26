@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-fn usage_from_transcript(path: &Path) -> Usage {
+pub(crate) fn usage_from_transcript(path: &Path) -> Usage {
     let mut usage = Usage::default();
     let Ok(contents) = fs::read_to_string(path) else {
         return usage;
