@@ -44,10 +44,9 @@ public, even after it is deleted.
 
 ## Verification
 
-Until the first ticket brings code in, CI checks only the skeleton's own invariants:
-
 ```sh
+cargo build --locked --all-targets
+cargo test --locked
+cargo clippy --locked --all-targets -- -D warnings
 .github/scripts/check-dev-docs.sh
 ```
-
-Once there is code, the ticket that brings it in adds its build, test and lint commands here.
