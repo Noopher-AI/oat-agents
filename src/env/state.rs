@@ -129,8 +129,7 @@ impl EnvStore {
         let here: Vec<EnvRecord> = self.list().into_iter().filter(|record| cwd.starts_with(&record.worktree)).collect();
         let candidate = here
             .iter()
-            .filter(|record| role.is_none_or(|role| record.role == role))
-            .next_back()
+            .rfind(|record| role.is_none_or(|role| record.role == role))
             .cloned();
         // An environment that is here but belongs to another role is a different mistake from
         // no environment at all, and saying which one it is saves the caller from looking for
