@@ -942,7 +942,9 @@ impl TuiState {
         self.preview = session.filter(|_| alive).map(Preview::new);
         self.preview_area = None;
         self.load_transcript();
-        self.start_typing();
+        // The page opens watching, not typing: every key would otherwise go straight to the
+        // agent. Enter steps in.
+        self.typing = false;
     }
 
     fn close_detail(&mut self) {
@@ -1123,10 +1125,16 @@ impl TuiState {
                 if self.tab == Tab::Diff {
                     self.refresh_diff(control);
                 }
+                self.typing = false;
+            }
+            // Into the agent's terminal: the live tab is watched until Enter, which also
+            // leaves any reading back, since typing is at the live screen.
+            KeyCode::Enter if on_preview => {
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.leave_scroll();
+                }
                 self.start_typing();
             }
-            // Back into the agent's terminal after ctrl+] stepped out of it.
-            KeyCode::Enter if on_preview => self.start_typing(),
             KeyCode::Char('x') => self.ask_to_close(),
             KeyCode::Up | KeyCode::Down if on_preview && shift => {
                 self.preview_scroll(control, if key.code == KeyCode::Up { -1 } else { 1 });
