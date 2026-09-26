@@ -22,7 +22,7 @@ fn slug(worktree_path: &str) -> String {
         .collect()
 }
 
-fn claude_projects_dir(env: &dyn Environment) -> Option<PathBuf> {
+pub fn claude_projects_dir(env: &dyn Environment) -> Option<PathBuf> {
     env.home_dir().map(|home| home.join(".claude").join("projects"))
 }
 
@@ -35,7 +35,7 @@ fn project_dir(projects_root: &Path, worktree_path: &str) -> Option<PathBuf> {
 }
 
 /// The newest `.jsonl` session file under a worktree's Claude Code project directory.
-fn find_transcript(projects_root: &Path, worktree_path: &str) -> Option<PathBuf> {
+pub fn find_transcript(projects_root: &Path, worktree_path: &str) -> Option<PathBuf> {
     let project = project_dir(projects_root, worktree_path)?;
     fs::read_dir(&project)
         .ok()?
@@ -72,6 +72,8 @@ pub enum RowKind {
     Text,
     Tool,
     Result,
+    /// Typed at the session after its task — by an operator on the live tab.
+    You,
 }
 
 #[derive(Clone, Debug)]
@@ -86,17 +88,26 @@ pub fn render(path: &Path, limit: usize) -> Vec<Row> {
         return Vec::new();
     };
     let mut rows = Vec::new();
+    let mut saw_prompt = false;
     for line in contents.lines() {
         let Ok(entry) = serde_json::from_str::<Value>(line) else {
             continue;
         };
+        // Claude Code's own injected notes, which nobody said.
+        if entry.get("isMeta").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
         let time = entry.get("timestamp").and_then(Value::as_str).unwrap_or_default().to_string();
         let role = entry.pointer("/message/role").and_then(Value::as_str).unwrap_or_default();
         match entry.pointer("/message/content") {
-            Some(Value::String(text)) => {
-                let kind = if role == "user" { RowKind::Prompt } else { RowKind::Text };
+            // The first thing typed at a session is its task; anything typed later is the
+            // operator talking to it.
+            Some(Value::String(text)) if role == "user" => {
+                let kind = if saw_prompt { RowKind::You } else { RowKind::Prompt };
+                saw_prompt = true;
                 push(&mut rows, &time, kind, text);
             }
+            Some(Value::String(text)) => push(&mut rows, &time, RowKind::Text, text),
             Some(Value::Array(blocks)) => {
                 for block in blocks {
                     match block.get("type").and_then(Value::as_str) {
@@ -114,7 +125,11 @@ pub fn render(path: &Path, limit: usize) -> Vec<Row> {
                         ),
                         Some("tool_use") => {
                             let name = block.get("name").and_then(Value::as_str).unwrap_or("tool");
-                            push(&mut rows, &time, RowKind::Tool, name);
+                            let input = block
+                                .get("input")
+                                .map(|value| condense(&value.to_string(), 160))
+                                .unwrap_or_default();
+                            push(&mut rows, &time, RowKind::Tool, &format!("{name} {input}"));
                         }
                         Some("tool_result") => {
                             let text = match block.get("content") {
@@ -122,7 +137,7 @@ pub fn render(path: &Path, limit: usize) -> Vec<Row> {
                                 Some(other) => other.to_string(),
                                 None => String::new(),
                             };
-                            push(&mut rows, &time, RowKind::Result, &text);
+                            push(&mut rows, &time, RowKind::Result, &condense(&text, 240));
                         }
                         _ => {}
                     }
@@ -148,6 +163,19 @@ fn push(rows: &mut Vec<Row>, time: &str, kind: RowKind, text: &str) {
         kind,
         text: trimmed.to_string(),
     });
+}
+
+/// A tool's input or output on one line, cut to `limit` characters: the log reads it as the
+/// context behind a turn, not as the turn itself.
+fn condense(text: &str, limit: usize) -> String {
+    let single: String = text.chars().map(|c| if c == '\n' { ' ' } else { c }).collect();
+    let trimmed = single.trim();
+    if trimmed.chars().count() > limit {
+        let head: String = trimmed.chars().take(limit - 3).collect();
+        format!("{head}...")
+    } else {
+        trimmed.to_string()
+    }
 }
 
 /// What the newest entry says the agent is doing right now.
@@ -258,6 +286,69 @@ pub fn pulse_for(env: &dyn Environment, dispatch: &DispatchRecord) -> Option<Pul
     let path = find_transcript(&projects_root, &dispatch.worktree)?;
     let contents = fs::read_to_string(path).ok()?;
     pulse_from(&contents)
+}
+
+/// What one transcript says about its session: what it spent, what it is doing, what it runs
+/// as, and how full its context is — the live view's roster reads all four at once.
+#[derive(Clone, Debug, Default)]
+pub struct Session {
+    pub usage: crate::pricing::Usage,
+    pub pulse: Option<Pulse>,
+    /// The model of the most recent turn, which is what the agent runs on now.
+    pub model: Option<String>,
+    /// Reasoning effort of the most recent turn.
+    pub effort: Option<String>,
+    /// Everything the most recent turn was given to read — fresh, written to cache, or read
+    /// back from it: how full the context is now, which cumulative usage does not say.
+    pub context: Option<u64>,
+}
+
+impl Session {
+    /// The share of its context window the newest turn occupies, as a percentage. `None` for a
+    /// model the pricing table does not know: a share of a guessed window would mislead.
+    pub fn context_share(&self) -> Option<f64> {
+        let window = crate::pricing::context_window(self.model.as_deref()?)?;
+        Some(self.context? as f64 / window as f64 * 100.0)
+    }
+}
+
+/// Reads a session's spend, pulse, model and effort from its transcript in one pass.
+pub fn session(path: &Path) -> Session {
+    let Ok(contents) = fs::read_to_string(path) else {
+        return Session::default();
+    };
+    let mut session = Session {
+        usage: crate::usage::usage_from_transcript(path),
+        pulse: pulse_from(&contents),
+        ..Session::default()
+    };
+    for line in contents.lines() {
+        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if entry.get("type").and_then(Value::as_str) != Some("assistant") {
+            continue;
+        }
+        if let Some(model) = entry.pointer("/message/model").and_then(Value::as_str) {
+            session.model = Some(model.to_string());
+        }
+        if let Some(usage) = entry.pointer("/message/usage") {
+            let count = |key: &str| usage.get(key).and_then(Value::as_u64).unwrap_or(0);
+            session.context = Some(
+                count("input_tokens") + count("cache_read_input_tokens") + count("cache_creation_input_tokens"),
+            );
+        }
+        // Both keys are usually present with one of them null, so each is read as a string
+        // before falling through to the other.
+        if let Some(effort) = entry
+            .get("perTurnEffort")
+            .and_then(Value::as_str)
+            .or_else(|| entry.get("effort").and_then(Value::as_str))
+        {
+            session.effort = Some(effort.to_string());
+        }
+    }
+    session
 }
 
 #[cfg(test)]

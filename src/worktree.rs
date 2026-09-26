@@ -49,6 +49,37 @@ pub fn run_git(repo: &Path, args: &[&str]) -> Result<std::process::Output> {
     Ok(output)
 }
 
+/// Lines added and removed in `worktree` against `base`, summed over its files.
+pub fn diff_stat(worktree: &Path, base: &str) -> Result<(u32, u32)> {
+    let output = run_git(worktree, &["diff", "--numstat", base])?;
+    if !output.status.success() {
+        return Err(err(
+            codes::INTERNAL_ERROR,
+            format!("git diff failed: {}", String::from_utf8_lossy(&output.stderr).trim()),
+        ));
+    }
+    let mut added = 0;
+    let mut removed = 0;
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let mut parts = line.split('\t');
+        added += parts.next().and_then(|n| n.parse::<u32>().ok()).unwrap_or(0);
+        removed += parts.next().and_then(|n| n.parse::<u32>().ok()).unwrap_or(0);
+    }
+    Ok((added, removed))
+}
+
+/// What `worktree` changed against `base`, as a unified diff.
+pub fn diff(worktree: &Path, base: &str) -> Result<String> {
+    let output = run_git(worktree, &["--no-pager", "diff", base])?;
+    if !output.status.success() {
+        return Err(err(
+            codes::INTERNAL_ERROR,
+            format!("git diff failed: {}", String::from_utf8_lossy(&output.stderr).trim()),
+        ));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 fn git_ok(repo: &Path, args: &[&str]) -> Result<()> {
     let output = run_git(repo, args)?;
     if !output.status.success() {

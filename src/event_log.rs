@@ -37,6 +37,11 @@ impl EventLog {
         Self { dir }
     }
 
+    /// Where the log is kept, when it is kept at all.
+    pub fn dir(&self) -> Option<&std::path::Path> {
+        self.dir.as_deref()
+    }
+
     /// Appends one entry. A missing log directory disables logging without failing the
     /// caller's command (`environment::log_dir`'s contract).
     pub fn record(&self, entry: &LogEntry) -> Result<()> {
