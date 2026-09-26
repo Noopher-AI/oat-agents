@@ -33,7 +33,7 @@ Run.
 - Every TOML file rejects unknown fields.
 - Skills refer to each other as `$skill-name`; rendering rewrites the reference for a backend
   that spells it differently.
-- The core roles' instructions come from plugins (ADR-0004). Among the plugins a Run loads, at
+- The core roles' team instructions come from plugins (ADR-0004) after the core baseline. Among the plugins a Run loads, at
   least one must supply each `core/*-instruction.md`; when several do, they are joined in the
   order the plugins are listed.
 
