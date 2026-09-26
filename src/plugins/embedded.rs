@@ -57,10 +57,10 @@ pub fn materialize_example(dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Whether the embedded example currently has any content — `false` until `plugins/example/`
-/// exists in the repository at build time. Always `true` in this build (clippy can see that at
-/// compile time, hence the `allow`); once F6 adds `plugins/example/`, `EXAMPLE_FILES` stops
-/// being an empty compile-time constant and the lint no longer applies.
+/// Whether the embedded example currently has any content — `false` once `plugins/example/`
+/// exists in the repository at build time; `true` only in a build from before it did. Its
+/// value is a compile-time constant either way, which is exactly what clippy's `const_is_empty`
+/// flags; the `allow` covers both states of that constant, not just the current one.
 #[allow(clippy::const_is_empty)]
 pub fn is_empty() -> bool {
     EXAMPLE_FILES.is_empty()

@@ -186,6 +186,38 @@ fn plugin_list_reports_trust_status_without_starting_anything() {
 }
 
 #[test]
+fn the_embedded_example_plugin_resolves_trusts_and_starts_a_run() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+
+    run(parse(&["init", "--repo", &repo.path().to_string_lossy(), "--embedded"]), &world.env()).unwrap();
+
+    let version = oat_agents::plugins::embedded::example_version().to_string();
+    let error = fire(&repo.path(), &world, "run-a").unwrap_err();
+    let failure = to_failure(&error);
+    assert_eq!(failure.code, codes::PLUGIN_UNTRUSTED);
+    assert!(failure.message.contains(&format!(
+        "oat-agents plugin trust embedded --name example --version {version}"
+    )));
+
+    run(
+        parse(&["plugin", "trust", "embedded", "--name", "example", "--version", &version]),
+        &world.env(),
+    )
+    .unwrap();
+
+    let result = fire(&repo.path(), &world, "run-b").unwrap();
+    let run_id = result["run_id"].as_str().unwrap().to_string();
+    let store = oat_agents::store::Store::open(&world.env()).unwrap();
+    let run_record = store.load_run(&run_id).unwrap();
+    assert_eq!(run_record.plugins, vec![oat_agents::store::PluginRecord {
+        name: "example".to_string(),
+        source: "embedded".to_string(),
+        version,
+    }]);
+}
+
+#[test]
 fn the_console_launch_is_gated_exactly_like_meta_fire() {
     let world = TestWorld::new();
     let env = world.env();
