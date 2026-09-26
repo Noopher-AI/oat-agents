@@ -1,11 +1,26 @@
 use crate::error::{codes, err, CliFailure};
-use crate::role::{Backend, SkillRef};
+use crate::launch::prompt;
+use crate::role::{Backend, SkillFile, SkillRef};
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// The core skill for reading the system (ADR-0004): the CLI supplies it, no plugin decides
+/// whether it exists, so every place that materializes an agent's skills adds it alongside
+/// whatever the catalog declares, rather than the catalog declaring it itself.
+pub fn oat_system_view_skill() -> SkillRef {
+    SkillRef {
+        name: "oat-system-view".to_string(),
+        files: vec![SkillFile {
+            relative_path: PathBuf::from("SKILL.md"),
+            contents: prompt::OAT_SYSTEM_VIEW_SKILL.as_bytes().to_vec(),
+            executable: false,
+        }],
+    }
+}
 
 /// The worktree-relative directory a backend reads project-level skills from (ADR-0003).
 /// Verified on this machine against an installed Codex (0.155.1): its own `--help`/`doctor`

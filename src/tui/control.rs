@@ -4,6 +4,7 @@
 //! seam — so a test can run the whole view against a recording stand-in.
 
 use crate::environment::Environment;
+use crate::role::RoleCatalog;
 use crate::session::tmux::Tmux;
 use anyhow::Result;
 use std::path::Path;
@@ -18,10 +19,17 @@ pub trait Control {
     /// Closes a Run: the same lifecycle `meta finish` runs, callable by the operator directly
     /// when its own coordinator cannot (ticket Scope: "closing a Run").
     fn close_run(&self, run_id: &str) -> Result<()>;
+    /// Opens `repo`'s console (ADR-0005), creating it on first use, and returns its session
+    /// name so the live view can view and type into it the same way it does an agent's live
+    /// tab (ticket Scope: "opening ... it from the live view").
+    fn open_console(&self, repo: &Path, backend: &str) -> Result<String>;
+    /// Stops `repo`'s console session (ticket Scope: "stopping it from the live view").
+    fn stop_console(&self, repo: &Path) -> Result<()>;
 }
 
 pub struct RealControl<'a> {
     pub env: &'a dyn Environment,
+    pub catalog: &'a dyn RoleCatalog,
 }
 
 impl Control for RealControl<'_> {
@@ -61,6 +69,17 @@ impl Control for RealControl<'_> {
             self.env,
             &catalog,
         )?;
+        Ok(())
+    }
+
+    fn open_console(&self, repo: &Path, backend: &str) -> Result<String> {
+        let backend = backend.parse()?;
+        let record = crate::console::open(self.env, self.catalog, repo, backend)?;
+        Ok(record.session)
+    }
+
+    fn stop_console(&self, repo: &Path) -> Result<()> {
+        crate::console::stop(self.env, repo)?;
         Ok(())
     }
 }

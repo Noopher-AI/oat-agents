@@ -99,6 +99,31 @@ fn the_console_baseline_prohibits_the_inbox_release_teardown_and_interactive_pan
 }
 
 #[test]
+fn opening_a_console_delivers_the_core_system_view_skill_even_when_the_catalog_declares_none() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    let catalog = InMemoryCatalogBuilder::new()
+        .with_core_role(
+            CoreRole::Console,
+            CoreRoleDefinition {
+                instructions: "team instructions".to_string(),
+                models: BTreeMap::from([(Backend::Claude, ModelSetting::default())]),
+                skills: Vec::new(),
+            },
+        )
+        .build();
+
+    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+
+    let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
+    let skill_file = dir.join(".claude/skills/oat-system-view/SKILL.md");
+    assert!(skill_file.exists(), "the core skill must be materialized even with no catalog skills");
+    let contents = std::fs::read_to_string(&skill_file).unwrap();
+    assert!(contents.contains("name: oat-system-view"));
+}
+
+#[test]
 fn two_consoles_opened_from_two_repositories_get_two_directories() {
     let world = TestWorld::new();
     let env = world.env();

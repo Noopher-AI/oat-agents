@@ -74,11 +74,13 @@ fn render_baseline(repo: &str) -> String {
     prompt::OAT_CONSOLE_BASELINE.replace("{{REPOSITORY}}", repo)
 }
 
-/// Opens the console for `repo`: creates its directory on first use, materializes the
-/// catalog's `oat-console` skills into it, assembles its prompt from the preamble, the
-/// baseline (naming this repository and the prohibitions ADR-0004/ADR-0005 require), and the
-/// catalog's instructions — in that order — and starts its session. Reopening a console whose
-/// session is still alive is a no-op that returns the existing record.
+/// Opens the console for `repo`: creates its directory on first use, materializes the core
+/// skill `oat-system-view` alongside whatever skills the catalog's `oat-console` entry
+/// declares (ADR-0004: the core supplies the skills for reading the system, and no plugin
+/// decides whether that skill exists), assembles its prompt from the preamble, the baseline
+/// (naming this repository and the prohibitions ADR-0004/ADR-0005 require), and the catalog's
+/// instructions — in that order — and starts its session. Reopening a console whose session is
+/// still alive is a no-op that returns the existing record.
 pub fn open(
     env: &dyn Environment,
     catalog: &dyn RoleCatalog,
@@ -103,7 +105,9 @@ pub fn open(
     let core_role = catalog.core_role(CoreRole::Console)?;
     let model = core_role.models.get(&backend).cloned().unwrap_or_default();
 
-    skills::materialize_skills_plain(&dir, backend, &core_role.skills)?;
+    let mut console_skills = core_role.skills.clone();
+    console_skills.push(skills::oat_system_view_skill());
+    skills::materialize_skills_plain(&dir, backend, &console_skills)?;
 
     let repo_label = repo.to_string_lossy().to_string();
     let preamble = render_preamble(&repo_label, backend, &dir.to_string_lossy());

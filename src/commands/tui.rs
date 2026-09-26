@@ -1,6 +1,7 @@
 use crate::checklist::ChecklistStore;
 use crate::environment::Environment;
 use crate::event_log::EventLog;
+use crate::role::RoleCatalog;
 use crate::store::Store;
 use crate::tui::{App, RealControl};
 use anyhow::Result;
@@ -16,11 +17,11 @@ use std::time::Duration;
 /// The real terminal loop. Everything it decides — what to render, what a key does — lives in
 /// `tui::App`, tested on its own against recorded Runs; this function only owns the terminal
 /// and the event source, neither of which a test can usefully fake.
-pub fn run(env: &dyn Environment) -> Result<Value> {
+pub fn run(env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
     let store = Store::open(env)?;
     let log = EventLog::open(env);
     let checklist = ChecklistStore::open(env);
-    let control = RealControl { env };
+    let control = RealControl { env, catalog };
     let mut app = App::new(&store, &log, &checklist, &control)?;
 
     enable_raw_mode()?;

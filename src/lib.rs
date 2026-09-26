@@ -129,7 +129,7 @@ pub fn execute_with_exec(
             env::commands::execute(env, &log, command)
         }
         TopCommand::Console { command } => commands::console::run(command, env, catalog),
-        TopCommand::Tui => commands::tui::run(env),
+        TopCommand::Tui => commands::tui::run(env, catalog),
     }
 }
 

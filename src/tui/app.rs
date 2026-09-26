@@ -16,7 +16,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Tabs};
 use ratatui::Frame;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentTab {
@@ -60,6 +60,10 @@ pub enum Focus {
     Picker,
     Roster,
     Agent(AgentTab),
+    /// The current Run's repository console (ADR-0005), viewed and typed into the same way an
+    /// agent's live tab is (ticket Scope: "opening, leaving and stopping it from the live
+    /// view").
+    Console,
 }
 
 #[derive(Debug, Clone)]
@@ -116,6 +120,8 @@ pub struct App<'a> {
     pub status_line: String,
     pub should_quit: bool,
     pub last_size: Option<(u16, u16)>,
+    pub console_repo: Option<PathBuf>,
+    pub console_session: Option<String>,
 }
 
 impl<'a> App<'a> {
@@ -139,6 +145,8 @@ impl<'a> App<'a> {
             status_line: String::new(),
             should_quit: false,
             last_size: None,
+            console_repo: None,
+            console_session: None,
         };
         app.reload_runs()?;
         Ok(app)
@@ -226,6 +234,7 @@ impl<'a> App<'a> {
             Focus::Agent(_) => Focus::Roster,
             Focus::Roster => Focus::Picker,
             Focus::Picker => Focus::Picker,
+            Focus::Console => Focus::Picker,
         };
     }
 
@@ -241,7 +250,7 @@ impl<'a> App<'a> {
             Focus::Roster => {
                 self.dispatch_cursor = clamp_cursor(self.dispatch_cursor, delta, self.dispatches.len())
             }
-            Focus::Agent(_) => {}
+            Focus::Agent(_) | Focus::Console => {}
         }
     }
 
@@ -258,7 +267,66 @@ impl<'a> App<'a> {
         Ok(())
     }
 
+    /// Opens the console of the selected Run's repository (ADR-0005) and switches focus to it
+    /// — the more natural of the two repositories a live-view action could pick, since the
+    /// operator already picked a Run and the picker has no other notion of "current
+    /// repository". Reopening one already open is the no-op `console::open` already makes it.
+    pub fn open_console(&mut self) -> Result<()> {
+        let Some(run) = self.selected_run() else {
+            return Ok(());
+        };
+        let run_id = run.id.clone();
+        let record = self.store.load_run(&run_id)?;
+        let repo = PathBuf::from(&record.repo);
+        let session = self.control.open_console(&repo, &record.backend)?;
+        if let Some((cols, rows)) = self.last_size {
+            let _ = self.control.resize(&session, cols, rows);
+        }
+        self.console_repo = Some(repo);
+        self.console_session = Some(session);
+        self.live_input.clear();
+        self.focus = Focus::Console;
+        Ok(())
+    }
+
+    /// Leaves the console view without stopping its session (ticket Scope: "leaving ... it").
+    pub fn leave_console(&mut self) {
+        self.focus = Focus::Picker;
+    }
+
+    /// Stops the open console's session (ticket Scope: "stopping it") and leaves its view.
+    pub fn stop_console(&mut self) -> Result<()> {
+        if let Some(repo) = self.console_repo.clone() {
+            self.control.stop_console(&repo)?;
+            self.status_line = format!("stopped console for {}", repo.display());
+        }
+        self.console_repo = None;
+        self.console_session = None;
+        self.focus = Focus::Picker;
+        Ok(())
+    }
+
     pub fn handle_key(&mut self, key: KeyCode) -> Result<()> {
+        if let Focus::Console = self.focus {
+            match key {
+                KeyCode::Esc => self.leave_console(),
+                KeyCode::F(1) => self.stop_console()?,
+                KeyCode::Enter => {
+                    if let Some(session) = self.console_session.clone() {
+                        let text = std::mem::take(&mut self.live_input);
+                        self.control.send_text(&session, &text)?;
+                        self.control.send_key(&session, "Enter")?;
+                    }
+                }
+                KeyCode::Backspace => {
+                    self.live_input.pop();
+                }
+                KeyCode::Char(c) => self.live_input.push(c),
+                _ => {}
+            }
+            return Ok(());
+        }
+
         if let Focus::Agent(AgentTab::Live) = self.focus {
             match key {
                 KeyCode::Esc => self.back(),
@@ -288,6 +356,7 @@ impl<'a> App<'a> {
             (Focus::Roster, KeyCode::Enter) => self.enter_agent(),
             (_, KeyCode::Esc) => self.back(),
             (Focus::Picker, KeyCode::Char('c')) => self.close_selected_run()?,
+            (Focus::Picker, KeyCode::Char('v')) => self.open_console()?,
             _ => {}
         }
         Ok(())
@@ -305,6 +374,7 @@ impl<'a> App<'a> {
             Focus::Picker => self.render_picker(frame),
             Focus::Roster => self.render_roster(frame),
             Focus::Agent(tab) => self.render_agent(frame, tab),
+            Focus::Console => self.render_console(frame),
         }
     }
 
@@ -396,6 +466,7 @@ impl<'a> App<'a> {
                 let entries = self.log.read_run(&run_id).unwrap_or_default();
                 entries
                     .iter()
+                    .filter(|e| e.agent.as_deref() == Some(dispatch.role.as_str()))
                     .map(|e| format!("{} {} {}", e.timestamp, e.event, e.agent.clone().unwrap_or_default()))
                     .collect::<Vec<_>>()
                     .join("\n")
@@ -424,6 +495,24 @@ impl<'a> App<'a> {
             chunks[1],
         );
     }
+
+    /// The console's view: typed into without attaching, the same as an agent's live tab
+    /// (ticket Scope: "opening, leaving and stopping it from the live view").
+    fn render_console(&self, frame: &mut Frame) {
+        let area = frame.area();
+        let session = self.console_session.clone().unwrap_or_default();
+        let pane = self.control.capture_pane(&session).unwrap_or_else(|e| format!("error: {e}"));
+        let body = format!("{pane}\n> {}", self.live_input);
+        let title = self
+            .console_repo
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        frame.render_widget(
+            Paragraph::new(body).block(Block::default().borders(Borders::ALL).title(format!("Console - {title}"))),
+            area,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -441,6 +530,7 @@ mod tests {
         panes: HashMap<String, String>,
         diffs: HashMap<String, String>,
         calls: RefCell<Vec<String>>,
+        console_sessions: HashMap<String, String>,
     }
 
     impl Control for FixtureControl {
@@ -477,6 +567,23 @@ mod tests {
 
         fn close_run(&self, run_id: &str) -> Result<()> {
             self.calls.borrow_mut().push(format!("close_run {run_id}"));
+            Ok(())
+        }
+
+        fn open_console(&self, repo: &Path, backend: &str) -> Result<String> {
+            let repo = repo.to_string_lossy().to_string();
+            self.calls.borrow_mut().push(format!("open_console {repo} {backend}"));
+            Ok(self
+                .console_sessions
+                .get(&repo)
+                .cloned()
+                .unwrap_or_else(|| format!("console-{repo}")))
+        }
+
+        fn stop_console(&self, repo: &Path) -> Result<()> {
+            self.calls
+                .borrow_mut()
+                .push(format!("stop_console {}", repo.to_string_lossy()));
             Ok(())
         }
     }
@@ -583,13 +690,23 @@ mod tests {
             "/repo.oat-run-a-open-worker".to_string(),
             "diff --git a/x b/x\n+added line".to_string(),
         );
+        let console_session = "console-repo-session".to_string();
+        panes.insert(console_session.clone(), "$ oat-agents log runs --repo /repo".to_string());
+        let mut console_sessions = HashMap::new();
+        console_sessions.insert("/repo".to_string(), console_session);
 
         Fixture {
             _dir: dir,
             store,
             log,
             checklist,
-            control: FixtureControl { alive, panes, diffs, calls: RefCell::new(Vec::new()) },
+            control: FixtureControl {
+                alive,
+                panes,
+                diffs,
+                calls: RefCell::new(Vec::new()),
+                console_sessions,
+            },
         }
     }
 
@@ -645,15 +762,31 @@ mod tests {
     }
 
     #[test]
-    fn log_tab_shows_the_workflow_log() {
+    fn log_tab_shows_only_the_selected_agents_log_entries() {
         let fx = build_fixture();
+        // A run-level entry with no agent, and another agent's entry, must not leak into the
+        // selected agent's Log tab (ticket Scope: "its log", not the whole Run's log).
+        fx.log
+            .record(&LogEntry {
+                timestamp: now_iso(),
+                run_id: "run-a-open".to_string(),
+                dispatch_id: Some("dispatch-2".to_string()),
+                agent: Some("reviewer".to_string()),
+                event: events::AGENT_EXIT.to_string(),
+                details: None,
+            })
+            .unwrap();
+
         let mut app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
         app.enter_roster().unwrap();
         app.enter_agent();
         app.handle_key(KeyCode::Tab).unwrap();
         let text = draw(&app);
-        assert!(text.contains(events::NEEDS_HUMAN), "{text}");
+        assert!(text.contains(events::AGENT_ENTER), "{text}");
         assert!(text.contains("worker"), "{text}");
+        assert!(!text.contains(events::NEEDS_HUMAN), "{text} (a Run-level entry with no agent leaked in)");
+        assert!(!text.contains("reviewer"), "{text} (another agent's entry leaked in)");
+        assert!(!text.contains(events::AGENT_EXIT), "{text} (another agent's entry leaked in)");
     }
 
     #[test]
@@ -691,5 +824,62 @@ mod tests {
         assert_eq!(app.focus, Focus::Picker);
         let calls = fx.control.calls.borrow();
         assert!(calls.iter().any(|c| c.contains("close_run run-a-open")), "{calls:?}");
+    }
+
+    #[test]
+    fn opening_the_console_shows_its_pane_and_types_into_it_without_attaching() {
+        let fx = build_fixture();
+        let mut app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
+        app.set_viewport(60, 20);
+
+        app.handle_key(KeyCode::Char('v')).unwrap();
+        assert_eq!(app.focus, Focus::Console);
+
+        let text = draw(&app);
+        assert!(text.contains("oat-agents log runs"), "{text}");
+
+        for c in "hi".chars() {
+            app.handle_key(KeyCode::Char(c)).unwrap();
+        }
+        app.handle_key(KeyCode::Enter).unwrap();
+
+        let calls = fx.control.calls.borrow();
+        assert!(calls.iter().any(|c| c.contains("open_console /repo claude")), "{calls:?}");
+        assert!(
+            calls.iter().any(|c| c.contains("resize console-repo-session 60x20")),
+            "{calls:?}"
+        );
+        assert!(calls.iter().any(|c| c.contains("send_text") && c.contains("hi")), "{calls:?}");
+        assert!(calls.iter().any(|c| c.contains("send_key") && c.contains("Enter")), "{calls:?}");
+    }
+
+    #[test]
+    fn leaving_the_console_returns_to_the_picker_without_stopping_it() {
+        let fx = build_fixture();
+        let mut app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
+        app.handle_key(KeyCode::Char('v')).unwrap();
+        assert_eq!(app.focus, Focus::Console);
+
+        app.handle_key(KeyCode::Esc).unwrap();
+
+        assert_eq!(app.focus, Focus::Picker);
+        assert!(app.console_session.is_some(), "leaving must not clear the open session");
+        let calls = fx.control.calls.borrow();
+        assert!(!calls.iter().any(|c| c.contains("stop_console")), "{calls:?}");
+    }
+
+    #[test]
+    fn stopping_the_console_goes_through_control_and_returns_to_the_picker() {
+        let fx = build_fixture();
+        let mut app = App::new(&fx.store, &fx.log, &fx.checklist, &fx.control).unwrap();
+        app.handle_key(KeyCode::Char('v')).unwrap();
+        assert_eq!(app.focus, Focus::Console);
+
+        app.handle_key(KeyCode::F(1)).unwrap();
+
+        assert_eq!(app.focus, Focus::Picker);
+        assert!(app.console_session.is_none(), "stopping must clear the open session");
+        let calls = fx.control.calls.borrow();
+        assert!(calls.iter().any(|c| c.contains("stop_console /repo")), "{calls:?}");
     }
 }
