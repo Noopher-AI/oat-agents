@@ -103,6 +103,9 @@ A git worktree the core creates for one Dispatch, branched from its coordinator'
 **Execution environment**
 A container, described by an execution profile, in which a Dispatch's build and test
 commands run instead of the host.
+On Kubernetes, the only provider so far, it is one pod, and the operator-facing surfaces (the
+live view, `docs/exec-environments.md`) call it that. A role that asked for one and ran on the
+host is reported as such, never left to be inferred.
 
 **Execution profile**
 A named description of how a machine provides execution environments. The repository names

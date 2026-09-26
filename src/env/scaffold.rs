@@ -72,11 +72,36 @@ fn scaffold_machine_file(path: &Path, profile_name: &str, facts: &MachineFacts) 
     if facts.workspace != WorkspaceKind::default() {
         let _ = writeln!(addition, "workspace = \"{}\"", workspace_str(facts.workspace));
     }
+    addition.push_str(&optional_fields_template(profile_name));
     match existing {
         Some(_) => append(path, &addition)?,
         None => write(path, &addition)?,
     }
     Ok(FileOutcome::Created)
+}
+
+/// Every optional field a profile can carry, commented out with what it does, so the machine
+/// file itself says how to finish a profile instead of leaving the reader to find the source.
+fn optional_fields_template(profile_name: &str) -> String {
+    format!(
+        r#"
+# Optional. Uncomment what this machine needs; every value shown is an example.
+# run_as_uid = "host"          # "host": match the worktree's owner; "image": whatever the image declares
+# idle_ttl = "4h"              # `env reap` removes an environment idle longer than this
+# ready_timeout_secs = 180     # how long to wait for a pod to become ready
+# kubeconfig = "/path/to/kubeconfig"   # default: $KUBECONFIG, then ~/.kube/config
+
+# How the image is built from the repository's .devcontainer/ and how it reaches the nodes.
+# [profile.{profile_name}.image]
+# builder = "devcontainer"     # or "dockerfile": build .devcontainer/Dockerfile with docker
+# load = "none"                # "none": the cluster already sees the builder's images;
+#                              # "kind", "minikube", or "push" to a registry
+# cluster = "kind"             # the kind cluster to load into (load = "kind")
+# registry = "registry.internal:5000"   # the address the cluster pulls by (load = "push")
+# push_to = "127.0.0.1:5000"   # the address this machine pushes to, when it differs
+# push_tunnel = ["kubectl", "port-forward", "-n", "registry", "service/registry", "5000:5000"]
+"#
+    )
 }
 
 fn workspace_str(kind: WorkspaceKind) -> &'static str {
@@ -148,6 +173,27 @@ mod tests {
         assert_eq!(name, "local");
         assert_eq!(profile.context, "dev");
         assert_eq!(profile.namespace, "agents");
+
+        let machine = std::fs::read_to_string(home.join(config::MACHINE_CONFIG)).unwrap();
+        for field in ["run_as_uid", "idle_ttl", "ready_timeout_secs", "kubeconfig", "[profile.local.image]", "builder", "load", "registry", "push_to", "push_tunnel"] {
+            assert!(machine.contains(field), "the template names {field}: {machine}");
+        }
+    }
+
+    #[test]
+    fn the_template_uncommented_is_a_valid_profile() {
+        let body = optional_fields_template("local")
+            .lines()
+            .map(|line| line.strip_prefix("# ").unwrap_or(line))
+            .filter(|line| !line.starts_with("Optional") && !line.starts_with("How ") && !line.trim_start().starts_with('#') && !line.starts_with("  "))
+            .map(|line| line.split("  #").next().unwrap_or(line).trim_end().to_owned())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let text = format!("[profile.local]\ncontext = \"c\"\nnamespace = \"n\"\n{body}\n");
+        let parsed: config::ExecConfig = toml::from_str(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let profile = &parsed.profile["local"];
+        assert_eq!(profile.idle_ttl.as_deref(), Some("4h"));
+        assert_eq!(profile.image.push_to.as_deref(), Some("127.0.0.1:5000"));
     }
 
     #[test]

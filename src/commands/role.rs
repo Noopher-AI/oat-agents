@@ -124,13 +124,17 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
     let mut skills = role_def.skills.clone();
     let mut instructions = vec![role_def.instructions.clone()];
     let env_binding = bring_up_environment(env, &log, &run_id, role_def, &args.role, &worktree_path, exec)?;
-    if let Some(record) = &env_binding {
-        skills.push(crate::env::exec_environment_skill());
-        instructions.push(render_execution_environment_block(record));
-        if role_def.prior_verification {
-            let reusable = exec.reusable(env, &worktree_path, record);
-            instructions.push(render_prior_verification_block(record, &reusable));
+    match &env_binding {
+        EnvBinding::Bound(record) => {
+            skills.push(crate::env::exec_environment_skill());
+            instructions.push(render_execution_environment_block(record));
+            if role_def.prior_verification {
+                let reusable = exec.reusable(env, &worktree_path, record);
+                instructions.push(render_prior_verification_block(record, &reusable));
+            }
         }
+        EnvBinding::Skipped(reason) => instructions.push(render_no_environment_block(reason)),
+        EnvBinding::NotWanted => {}
     }
 
     let spec = LaunchSpec {
@@ -159,11 +163,27 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
         (model.model.clone(), model.reasoning_effort.clone()),
     )?;
 
-    if let Some(record) = &env_binding {
-        let mut dispatch_record = store.load_dispatch(&run_id, &dispatch.id)?;
-        dispatch_record.env_id = Some(record.env_id.clone());
-        dispatch_record.image_id = Some(record.image_id.clone());
-        store.save_dispatch(&dispatch_record)?;
+    match &env_binding {
+        EnvBinding::Bound(record) => {
+            let mut dispatch_record = store.load_dispatch(&run_id, &dispatch.id)?;
+            dispatch_record.env_id = Some(record.env_id.clone());
+            dispatch_record.image_id = Some(record.image_id.clone());
+            store.save_dispatch(&dispatch_record)?;
+        }
+        EnvBinding::Skipped(reason) => {
+            let mut dispatch_record = store.load_dispatch(&run_id, &dispatch.id)?;
+            dispatch_record.env_skipped = Some(reason.clone());
+            store.save_dispatch(&dispatch_record)?;
+            log.record(&crate::event_log::LogEntry {
+                timestamp: crate::event_log::now_iso(),
+                run_id: run_id.clone(),
+                dispatch_id: Some(dispatch.id.clone()),
+                agent: Some(args.role.clone()),
+                event: crate::event_log::events::ENV_SKIPPED.to_string(),
+                details: Some(json!({"role": args.role, "reason": reason})),
+            })?;
+        }
+        EnvBinding::NotWanted => {}
     }
 
     Ok(json!({
@@ -173,7 +193,33 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
+        "exec": env_binding.to_json(),
     }))
+}
+
+/// What a role launch got in the way of an execution environment — always reported, so a role
+/// that asked for one and ran on the host is visible in the launch result, the log and the view.
+enum EnvBinding {
+    Bound(Box<crate::env::EnvRecord>),
+    Skipped(String),
+    NotWanted,
+}
+
+impl EnvBinding {
+    fn to_json(&self) -> Value {
+        match self {
+            EnvBinding::Bound(record) => json!({
+                "environment": "pod",
+                "profile": record.profile,
+                "env_id": record.env_id,
+                "pod": record.pod,
+                "namespace": record.namespace,
+                "image_id": record.image_id,
+            }),
+            EnvBinding::Skipped(reason) => json!({"environment": "host", "warning": reason}),
+            EnvBinding::NotWanted => json!({"environment": "host"}),
+        }
+    }
 }
 
 /// Whether this Dispatch gets an execution environment is two reads of the role definition
@@ -189,21 +235,31 @@ fn bring_up_environment(
     role: &str,
     worktree: &Path,
     exec: &dyn ExecEnvironments,
-) -> Result<Option<crate::env::EnvRecord>> {
+) -> Result<EnvBinding> {
     if !role_def.exec_environment {
-        return Ok(None);
+        return Ok(EnvBinding::NotWanted);
     }
     let Some(profile) = EnvStore::open(env)?.run_profile(run_id) else {
-        return Ok(None);
+        return Ok(EnvBinding::Skipped(format!(
+            "role '{role}' asks for an execution environment, but this Run has no execution profile; \
+             its commands run on the host"
+        )));
     };
     let record = exec.ensure(env, log, run_id, &profile, role, worktree)?;
-    Ok(Some(record))
+    Ok(EnvBinding::Bound(Box::new(record)))
 }
 
 fn render_execution_environment_block(record: &crate::env::EnvRecord) -> String {
     format!(
         "<execution-environment>\nenv_id: {}\nimage_id: {}\n</execution-environment>",
         record.env_id, record.image_id
+    )
+}
+
+fn render_no_environment_block(reason: &str) -> String {
+    format!(
+        "<execution-environment>\nnone: {reason}. Say in your report that your verification ran \
+         on the host.\n</execution-environment>"
     )
 }
 

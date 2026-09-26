@@ -133,6 +133,11 @@ fn parse(args: &[&str]) -> Cli {
 /// flags each test exercises: `role fire` now rebuilds its catalog from the Run's plugin
 /// snapshot, not from the `catalog_with(...)` fixture passed alongside it.
 fn fire_run(world: &TestWorld, repo: &Path, exec_environment: bool, prior_verification: bool) -> String {
+    fire_run_reporting(world, repo, exec_environment, prior_verification);
+    "run-a".to_string()
+}
+
+fn fire_run_reporting(world: &TestWorld, repo: &Path, exec_environment: bool, prior_verification: bool) -> serde_json::Value {
     common::PluginBuilder::new(repo, "fixture-plugin", "fixture-plugin")
         .role_with(
             "worker",
@@ -150,8 +155,11 @@ fn fire_run(world: &TestWorld, repo: &Path, exec_environment: bool, prior_verifi
     let cli = parse(&[
         "meta", "fire", "--prompt", "plan", "--repo", &repo.to_string_lossy(), "--name", "run-a", "--agent", "claude",
     ]);
-    execute_with_exec(cli, &env, &catalog, &fake).unwrap();
-    "run-a".to_string()
+    execute_with_exec(cli, &env, &catalog, &fake).unwrap()
+}
+
+fn run_events(world: &TestWorld, run_id: &str) -> Vec<oat_agents::event_log::LogEntry> {
+    EventLog::open(&world.env()).read_run(run_id).unwrap()
 }
 
 #[test]
@@ -243,6 +251,83 @@ fn meta_finish_removes_the_runs_environments_and_reports_them() {
 
     assert_eq!(fake.calls.lock().unwrap().as_slice(), [format!("remove_run:{run_id}")]);
     assert_eq!(receipt["environments"]["removed"], serde_json::json!(["oat-fake-worker-1"]), "{receipt}");
+}
+
+#[test]
+fn meta_fire_reports_the_profile_it_selected_and_logs_it() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    write_exec_profile(&repo.path(), &world.home);
+    let result = fire_run_reporting(&world, &repo.path(), true, false);
+
+    assert_eq!(result["exec"]["profile"], "local", "{result}");
+    assert_eq!(result["exec"]["source"], "default_profile", "{result}");
+    assert!(result["exec"]["warning"].is_null(), "{result}");
+    let events = run_events(&world, "run-a");
+    let selected = events.iter().find(|e| e.event == "exec_profile_selected").expect("logged");
+    assert_eq!(selected.details.as_ref().unwrap()["profile"], "local");
+}
+
+#[test]
+fn a_run_with_no_profile_says_so_at_meta_fire_and_at_every_role_that_wanted_one() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    let result = fire_run_reporting(&world, &repo.path(), true, false);
+
+    assert!(result["exec"]["profile"].is_null(), "{result}");
+    assert_eq!(result["exec"]["roles_wanting_environment"], serde_json::json!(["worker"]));
+    let warning = result["exec"]["warning"].as_str().expect("a warning when a role wants a pod");
+    assert!(warning.contains("worker") && warning.contains("--exec-profile"), "{warning}");
+    assert!(run_events(&world, "run-a").iter().any(|e| e.event == "exec_profile_none"));
+
+    let catalog = catalog_with(true, false);
+    let fake = FakeExec::new();
+    let env_with_run = world.env().with_var("OAT_RUN_ID", "run-a");
+    let role_fire = parse(&["role", "fire", "worker", "--name", "w1", "--prompt", "do work"]);
+    let fired = execute_with_exec(role_fire, &env_with_run, &catalog, &fake).unwrap();
+
+    assert!(fake.calls.lock().unwrap().is_empty());
+    assert_eq!(fired["exec"]["environment"], "host", "{fired}");
+    assert!(fired["exec"]["warning"].as_str().is_some_and(|w| w.contains("no execution profile")), "{fired}");
+    let prompt = std::fs::read_to_string(PathBuf::from(fired["dispatch_dir"].as_str().unwrap()).join("prompt.md")).unwrap();
+    assert!(prompt.contains("<execution-environment>\nnone:"), "the role is told it has no pod: {prompt}");
+    let skipped = run_events(&world, "run-a").into_iter().find(|e| e.event == "env_skipped").expect("logged");
+    assert_eq!(skipped.dispatch_id.as_deref(), fired["dispatch_id"].as_str());
+    let store = oat_agents::store::Store::open(&world.env()).unwrap();
+    let dispatch = store.load_dispatch("run-a", fired["dispatch_id"].as_str().unwrap()).unwrap();
+    assert!(dispatch.env_skipped.is_some());
+}
+
+#[test]
+fn no_exec_is_deliberate_and_carries_no_warning() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    write_exec_profile(&repo.path(), &world.home);
+    common::PluginBuilder::new(&repo.path(), "fixture-plugin", "fixture-plugin")
+        .role_with("worker", "fresh", "Work.", &[], true, false)
+        .with_default_core()
+        .finish(&world, &repo.path(), "fixture-plugin", "fixture-plugin");
+    let cli = parse(&[
+        "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(), "--name", "run-a", "--no-exec",
+    ]);
+    let result = execute_with_exec(cli, &world.env(), &catalog_with(true, false), &FakeExec::new()).unwrap();
+    assert!(result["exec"]["profile"].is_null(), "{result}");
+    assert_eq!(result["exec"]["source"], "--no-exec");
+    assert!(result["exec"]["warning"].is_null(), "{result}");
+}
+
+#[test]
+fn role_fire_reports_the_pod_it_bound() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    write_exec_profile(&repo.path(), &world.home);
+    let run_id = fire_run(&world, &repo.path(), true, false);
+    let env_with_run = world.env().with_var("OAT_RUN_ID", &run_id);
+    let role_fire = parse(&["role", "fire", "worker", "--name", "w1", "--prompt", "do work"]);
+    let fired = execute_with_exec(role_fire, &env_with_run, &catalog_with(true, false), &FakeExec::new()).unwrap();
+    assert_eq!(fired["exec"]["environment"], "pod", "{fired}");
+    assert_eq!(fired["exec"]["env_id"], "oat-fake-worker-1");
+    assert_eq!(fired["exec"]["image_id"], "sha256:fakeimage");
 }
 
 #[test]
