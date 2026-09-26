@@ -195,6 +195,7 @@ pub fn launch_dispatch(
         created_at: now_iso(),
         env_id: None,
         image_id: None,
+        env_skipped: None,
         settled: None,
         report: None,
         released_at: None,

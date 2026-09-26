@@ -128,10 +128,20 @@ fn scaffold_exec_profile(env: &dyn Environment, repo: &std::path::Path, profile_
         .ok_or_else(|| err(codes::INVALID_CLI_ARGUMENTS, "--exec-profile requires --exec-namespace"))?;
     let facts = MachineFacts { context, namespace, workspace: args.exec_workspace };
     let report = scaffold::scaffold(env, repo, profile_name, &facts)?;
+    let machine_path = env
+        .home_dir()
+        .map(|home| home.join(crate::env::config::MACHINE_CONFIG).to_string_lossy().to_string());
     Ok(json!({
         "profile": profile_name,
         "repo_file": format!("{:?}", report.repo_file),
+        "repo_path": repo.join(crate::env::config::REPO_CONFIG).to_string_lossy(),
         "machine_file": format!("{:?}", report.machine_file),
+        "machine_path": machine_path,
+        "next": format!(
+            "finish the profile's image settings in the machine file (every optional field is there, \
+             commented out), then check it with `oat-agents env doctor --profile {profile_name}` and \
+             `oat-agents env image --profile {profile_name}`"
+        ),
     }))
 }
 
