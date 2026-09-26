@@ -4,6 +4,7 @@ use crate::env::state::EnvStore;
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::launch::{self, LaunchSpec};
+use crate::plugins::snapshot::catalog_from_snapshot;
 use crate::role::{Backend, RoleCatalog, RoleDefinition, StartLocation};
 use crate::store::{RunRecord, Store};
 use crate::worktree;
@@ -35,18 +36,13 @@ pub struct FireArgs {
     pub input_file: Option<PathBuf>,
 }
 
-pub fn run(
-    command: RoleCommand,
-    env: &dyn Environment,
-    catalog: &dyn RoleCatalog,
-    exec: &dyn ExecEnvironments,
-) -> Result<Value> {
+pub fn run(command: RoleCommand, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     match command {
-        RoleCommand::Fire(args) => fire(args, env, catalog, exec),
+        RoleCommand::Fire(args) => fire(args, env, exec),
     }
 }
 
-fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog, exec: &dyn ExecEnvironments) -> Result<Value> {
+fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     let run_id = env
         .var("OAT_RUN_ID")
         .ok_or_else(|| err(codes::RUN_NOT_BOUND, "role fire runs inside a Run; OAT_RUN_ID is not set"))?;
@@ -59,6 +55,11 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog, exec: 
     let agent = args.agent.clone().unwrap_or_else(|| run_record.backend.clone());
     let backend = Backend::from_str(&agent)?;
 
+    // The Run's plugins were resolved and trust-checked once, at `meta fire` (F5's Architecture:
+    // "Snapshot"); every role launch inside it rebuilds its catalog from that copy rather than
+    // re-reading `.oat/plugins.toml` or re-checking trust.
+    let catalog = catalog_from_snapshot(&store.run_plugin_snapshot_dir(&run_id))?;
+    let catalog = &catalog;
     let role_def = catalog.role(&args.role)?;
 
     match (role_def.start, &args.from) {

@@ -4,6 +4,7 @@ use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
 use crate::launch::{self, LaunchSpec};
+use crate::plugins;
 use crate::role::{Backend, CoreRole, RoleCatalog};
 use crate::store::{RunRecord, Store};
 use crate::worktree;
@@ -49,14 +50,14 @@ pub struct FinishArgs {
     pub run: Option<String>,
 }
 
-pub fn run(command: MetaCommand, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+pub fn run(command: MetaCommand, env: &dyn Environment) -> Result<Value> {
     match command {
-        MetaCommand::Fire(args) => fire(args, env, catalog),
+        MetaCommand::Fire(args) => fire(args, env),
         MetaCommand::Finish(args) => finish(args, env),
     }
 }
 
-fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     let big_plan = crate::resolve_text_input(&args.prompt, &args.input_file)?;
     let backend = Backend::from_str(&args.agent)?;
     let repo = args
@@ -64,6 +65,10 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         .canonicalize()
         .map_err(|e| err(codes::INVALID_INPUT, format!("invalid --repo: {e}")))?;
 
+    // The gate (ticket Scope): an uninitialised repository or an untrusted plugin stops the Run
+    // before a worktree, a branch or a run record exists.
+    let (resolved, catalog) = plugins::gate(&repo, env)?;
+    let catalog = &catalog;
     let core_role = catalog.core_role(CoreRole::Meta)?;
 
     let run_name = args
@@ -102,6 +107,10 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
     let log = EventLog::open(env);
     let dispatch_id = generate_id("dispatch");
 
+    // Every later catalog for this Run is built from this copy, not by re-reading
+    // `.oat/plugins.toml` (ticket Architecture: "Snapshot").
+    let plugin_records = plugins::snapshot::snapshot_plugins(&resolved, &store.run_plugin_snapshot_dir(&run_id))?;
+
     let run_record = RunRecord {
         id: run_id.clone(),
         name: run_id.clone(),
@@ -110,7 +119,7 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         backend: format!("{backend:?}").to_lowercase(),
         created_at: now_iso(),
         closed_at: None,
-        plugins: Vec::new(),
+        plugins: plugin_records.clone(),
         meta_worktree: Some(path.to_string_lossy().to_string()),
         meta_dispatch_id: Some(dispatch_id.clone()),
         big_plan: Some(big_plan.clone()),
@@ -124,6 +133,14 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         agent: None,
         event: events::RUN_CREATED.to_string(),
         details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "big_plan": big_plan})),
+    })?;
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: None,
+        agent: None,
+        event: events::PLUGINS_RESOLVED.to_string(),
+        details: Some(json!({"plugins": plugin_records})),
     })?;
 
     // The Run's execution profile is chosen once, here, and every role launch inherits it

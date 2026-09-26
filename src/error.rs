@@ -70,6 +70,13 @@ pub mod codes {
     pub const ENV_BACKEND_ERROR: &str = "env_backend_error";
     pub const ENV_EXEC_TIMEOUT: &str = "env_exec_timeout";
     pub const ENV_IMAGE_BUILD_FAILED: &str = "env_image_build_failed";
+    pub const PLUGIN_UNINITIALISED: &str = "plugin_uninitialised";
+    pub const PLUGIN_UNTRUSTED: &str = "plugin_untrusted";
+    pub const PLUGIN_PIN_INVALID: &str = "plugin_pin_invalid";
+    pub const PLUGIN_PIN_MISMATCH: &str = "plugin_pin_mismatch";
+    pub const PLUGIN_NAME_MISMATCH: &str = "plugin_name_mismatch";
+    pub const PLUGIN_FETCH_FAILED: &str = "plugin_fetch_failed";
+    pub const PLUGIN_ALREADY_INITIALISED: &str = "plugin_already_initialised";
 }
 
 pub fn err(code: &str, message: impl Into<String>) -> anyhow::Error {

@@ -1,6 +1,6 @@
 use crate::console;
 use crate::environment::Environment;
-use crate::role::{Backend, RoleCatalog};
+use crate::role::Backend;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde_json::{json, Value};
@@ -28,17 +28,17 @@ pub struct RepoArgs {
     pub repo: PathBuf,
 }
 
-pub fn run(command: ConsoleCommand, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+pub fn run(command: ConsoleCommand, env: &dyn Environment) -> Result<Value> {
     match command {
-        ConsoleCommand::Open(args) => open(args, env, catalog),
+        ConsoleCommand::Open(args) => open(args, env),
         ConsoleCommand::Stop(args) => stop(args, env),
         ConsoleCommand::Status(args) => status(args, env),
     }
 }
 
-fn open(args: OpenArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+fn open(args: OpenArgs, env: &dyn Environment) -> Result<Value> {
     let backend = Backend::from_str(&args.agent)?;
-    let record = console::open(env, catalog, &args.repo, backend)?;
+    let record = console::open(env, &args.repo, backend)?;
     Ok(json!({"repo": record.repo, "backend": record.backend, "session": record.session}))
 }
 

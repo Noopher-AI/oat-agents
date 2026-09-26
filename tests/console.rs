@@ -1,50 +1,16 @@
 mod common;
 
-use common::TestWorld;
-use oat_agents::role::memory::InMemoryCatalogBuilder;
-use oat_agents::role::{Backend, CoreRole, CoreRoleDefinition, ModelSetting, SkillFile, SkillRef};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-
-fn skill_with_script() -> SkillRef {
-    SkillRef {
-        name: "team-skill".to_string(),
-        files: vec![
-            SkillFile {
-                relative_path: PathBuf::from("SKILL.md"),
-                contents: b"# Team skill".to_vec(),
-                executable: false,
-            },
-            SkillFile {
-                relative_path: PathBuf::from("check.sh"),
-                contents: b"#!/bin/sh\necho ok\n".to_vec(),
-                executable: true,
-            },
-        ],
-    }
-}
-
-fn catalog_with_console_instructions(instructions: &str) -> oat_agents::role::memory::InMemoryCatalog {
-    InMemoryCatalogBuilder::new()
-        .with_core_role(
-            CoreRole::Console,
-            CoreRoleDefinition {
-                instructions: instructions.to_string(),
-                models: BTreeMap::from([(Backend::Claude, ModelSetting::default())]),
-                skills: vec![skill_with_script()],
-            },
-        )
-        .build()
-}
+use common::{PluginBuilder, TestWorld};
+use oat_agents::role::Backend;
 
 #[test]
 fn the_consoles_prompt_carries_the_catalogs_instructions_after_its_baseline() {
     let world = TestWorld::new();
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
-    let catalog = catalog_with_console_instructions("Watch spend and flag anything over budget.");
+    common::install_console_plugin(&world, repo.path(), "Watch spend and flag anything over budget.");
 
-    let record = oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    let record = oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
     assert_eq!(record.backend, "claude");
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
@@ -62,9 +28,19 @@ fn a_skill_with_a_script_lands_in_the_consoles_directory_with_the_script_executa
     let world = TestWorld::new();
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
-    let catalog = catalog_with_console_instructions("team instructions");
+    PluginBuilder::new(repo.path(), "fixture-plugin", "fixture-plugin")
+        .core("oat-meta", "Coordinate.")
+        .core_with("oat-console", "team instructions", &["team-skill"])
+        .skill(
+            "team-skill",
+            &[
+                ("SKILL.md", b"# Team skill", false),
+                ("check.sh", b"#!/bin/sh\necho ok\n", true),
+            ],
+        )
+        .finish(&world, repo.path(), "fixture-plugin", "fixture-plugin");
 
-    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let script = dir.join(".claude/skills/team-skill/check.sh");
@@ -83,9 +59,9 @@ fn the_console_baseline_prohibits_the_inbox_release_teardown_and_interactive_pan
     let world = TestWorld::new();
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
-    let catalog = catalog_with_console_instructions("team instructions");
+    common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let prompt = std::fs::read_to_string(dir.join("prompt.md")).unwrap().to_lowercase();
 
@@ -103,18 +79,9 @@ fn opening_a_console_delivers_the_core_system_view_skill_even_when_the_catalog_d
     let world = TestWorld::new();
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
-    let catalog = InMemoryCatalogBuilder::new()
-        .with_core_role(
-            CoreRole::Console,
-            CoreRoleDefinition {
-                instructions: "team instructions".to_string(),
-                models: BTreeMap::from([(Backend::Claude, ModelSetting::default())]),
-                skills: Vec::new(),
-            },
-        )
-        .build();
+    common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
 
     let dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let skill_file = dir.join(".claude/skills/oat-system-view/SKILL.md");
@@ -128,9 +95,9 @@ fn the_consoles_own_system_view_cross_reference_is_rewritten_per_backend() {
     let world = TestWorld::new();
     let env = world.env();
     let repo = tempfile::tempdir().unwrap();
-    let catalog = catalog_with_console_instructions("team instructions");
+    common::install_console_plugin(&world, repo.path(), "team instructions");
 
-    oat_agents::console::open(&env, &catalog, repo.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo.path(), Backend::Claude).unwrap();
     let claude_dir = oat_agents::console::console_dir(&env, &repo.path().canonicalize().unwrap()).unwrap();
     let claude_prompt = std::fs::read_to_string(claude_dir.join("prompt.md")).unwrap();
     assert!(
@@ -142,7 +109,8 @@ fn the_consoles_own_system_view_cross_reference_is_rewritten_per_backend() {
     let world_codex = TestWorld::new();
     let env_codex = world_codex.env();
     let repo_codex = tempfile::tempdir().unwrap();
-    oat_agents::console::open(&env_codex, &catalog, repo_codex.path(), Backend::Codex).unwrap();
+    common::install_console_plugin(&world_codex, repo_codex.path(), "team instructions");
+    oat_agents::console::open(&env_codex, repo_codex.path(), Backend::Codex).unwrap();
     let codex_dir =
         oat_agents::console::console_dir(&env_codex, &repo_codex.path().canonicalize().unwrap()).unwrap();
     let codex_prompt = std::fs::read_to_string(codex_dir.join("prompt.md")).unwrap();
@@ -158,10 +126,11 @@ fn two_consoles_opened_from_two_repositories_get_two_directories() {
     let env = world.env();
     let repo_a = tempfile::tempdir().unwrap();
     let repo_b = tempfile::tempdir().unwrap();
-    let catalog = catalog_with_console_instructions("team instructions");
+    common::install_console_plugin(&world, repo_a.path(), "team instructions");
+    common::install_console_plugin(&world, repo_b.path(), "team instructions");
 
-    oat_agents::console::open(&env, &catalog, repo_a.path(), Backend::Claude).unwrap();
-    oat_agents::console::open(&env, &catalog, repo_b.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo_a.path(), Backend::Claude).unwrap();
+    oat_agents::console::open(&env, repo_b.path(), Backend::Claude).unwrap();
 
     let dir_a = oat_agents::console::console_dir(&env, &repo_a.path().canonicalize().unwrap()).unwrap();
     let dir_b = oat_agents::console::console_dir(&env, &repo_b.path().canonicalize().unwrap()).unwrap();
@@ -173,6 +142,7 @@ fn two_consoles_opened_from_two_repositories_get_two_directories() {
 
 #[test]
 fn each_repositorys_read_only_run_listing_only_shows_its_own_runs() {
+    use oat_agents::role::memory::InMemoryCatalogBuilder;
     use oat_agents::store::{RunRecord, Store};
 
     let world = TestWorld::new();

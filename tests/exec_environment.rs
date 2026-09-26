@@ -124,9 +124,23 @@ fn parse(args: &[&str]) -> Cli {
     Cli::try_parse_from(full).unwrap()
 }
 
-fn fire_run(world: &TestWorld, repo: &Path) -> String {
+/// The Run's plugin (F5's gate) must itself carry the `exec_environment`/`prior_verification`
+/// flags each test exercises: `role fire` now rebuilds its catalog from the Run's plugin
+/// snapshot, not from the `catalog_with(...)` fixture passed alongside it.
+fn fire_run(world: &TestWorld, repo: &Path, exec_environment: bool, prior_verification: bool) -> String {
+    common::PluginBuilder::new(repo, "fixture-plugin", "fixture-plugin")
+        .role_with(
+            "worker",
+            "fresh",
+            "Write the pottery this task asks for.",
+            &[],
+            exec_environment,
+            prior_verification,
+        )
+        .with_default_core()
+        .finish(world, repo, "fixture-plugin", "fixture-plugin");
     let env = world.env();
-    let catalog = catalog_with(false, false);
+    let catalog = catalog_with(exec_environment, prior_verification);
     let fake = FakeExec::new();
     let cli = parse(&[
         "meta", "fire", "--prompt", "plan", "--repo", &repo.to_string_lossy(), "--name", "run-a", "--agent", "claude",
@@ -140,7 +154,7 @@ fn exec_environment_false_gets_no_environment_even_when_the_run_has_a_profile() 
     let repo = TempRepo::new();
     let world = TestWorld::new();
     write_exec_profile(&repo.path(), &world.home);
-    let run_id = fire_run(&world, &repo.path());
+    let run_id = fire_run(&world, &repo.path(), false, false);
 
     let catalog = catalog_with(false, false);
     let fake = FakeExec::new();
@@ -159,7 +173,7 @@ fn exec_environment_true_gets_one_when_the_run_has_a_profile() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
     write_exec_profile(&repo.path(), &world.home);
-    let run_id = fire_run(&world, &repo.path());
+    let run_id = fire_run(&world, &repo.path(), true, false);
 
     let catalog = catalog_with(true, false);
     let fake = FakeExec::new();
@@ -180,7 +194,7 @@ fn prior_verification_true_carries_the_ledgers_reusable_entries_and_false_does_n
     let repo = TempRepo::new();
     let world = TestWorld::new();
     write_exec_profile(&repo.path(), &world.home);
-    let run_id = fire_run(&world, &repo.path());
+    let run_id = fire_run(&world, &repo.path(), true, true);
 
     let catalog = catalog_with(true, true);
     let fake = FakeExec::new();
@@ -198,7 +212,7 @@ fn exec_environment_false_never_gets_prior_verification_either() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
     write_exec_profile(&repo.path(), &world.home);
-    let run_id = fire_run(&world, &repo.path());
+    let run_id = fire_run(&world, &repo.path(), false, true);
 
     let catalog = catalog_with(false, true);
     let fake = FakeExec::new();

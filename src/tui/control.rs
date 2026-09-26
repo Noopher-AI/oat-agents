@@ -4,7 +4,6 @@
 //! seam — so a test can run the whole view against a recording stand-in.
 
 use crate::environment::Environment;
-use crate::role::RoleCatalog;
 use crate::session::tmux::Tmux;
 use anyhow::Result;
 use std::path::Path;
@@ -29,7 +28,6 @@ pub trait Control {
 
 pub struct RealControl<'a> {
     pub env: &'a dyn Environment,
-    pub catalog: &'a dyn RoleCatalog,
 }
 
 impl Control for RealControl<'_> {
@@ -59,22 +57,18 @@ impl Control for RealControl<'_> {
     }
 
     fn close_run(&self, run_id: &str) -> Result<()> {
-        // `meta finish` takes a catalog only because every top command does; closing a Run
-        // never reads it, so an empty one stands in here.
-        let catalog = crate::role::memory::InMemoryCatalogBuilder::new().build();
         crate::commands::meta::run(
             crate::commands::meta::MetaCommand::Finish(crate::commands::meta::FinishArgs {
                 run: Some(run_id.to_string()),
             }),
             self.env,
-            &catalog,
         )?;
         Ok(())
     }
 
     fn open_console(&self, repo: &Path, backend: &str) -> Result<String> {
         let backend = backend.parse()?;
-        let record = crate::console::open(self.env, self.catalog, repo, backend)?;
+        let record = crate::console::open(self.env, repo, backend)?;
         Ok(record.session)
     }
 

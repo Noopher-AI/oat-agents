@@ -5,14 +5,17 @@ pub mod env;
 pub mod environment;
 pub mod error;
 pub mod event_log;
+pub mod hashing;
 pub mod launch;
 pub mod liveness;
 pub mod plugin;
+pub mod plugins;
 pub mod pricing;
 pub mod role;
 pub mod session;
 pub mod store;
 pub mod transcript;
+pub mod trust;
 pub mod tui;
 pub mod usage;
 pub mod worktree;
@@ -81,6 +84,13 @@ pub enum TopCommand {
     /// The live view: every Run, every agent's live terminal, its log and diff, and the
     /// checklist.
     Tui,
+    /// Declares a repository's pinned plugins and, optionally, its execution profile.
+    Init(commands::init::InitArgs),
+    /// Trusting and inspecting plugin sources on this machine.
+    Plugin {
+        #[command(subcommand)]
+        command: commands::plugin::PluginCommand,
+    },
 }
 
 /// Exactly one of `--prompt` or `--input-file` is required across several commands; this
@@ -113,12 +123,15 @@ pub fn execute(cli: Cli, env: &dyn Environment, catalog: &dyn RoleCatalog) -> an
 pub fn execute_with_exec(
     cli: Cli,
     env: &dyn Environment,
-    catalog: &dyn RoleCatalog,
+    _catalog: &dyn RoleCatalog,
     exec: &dyn ExecEnvironments,
 ) -> anyhow::Result<Value> {
+    // meta fire, console open, role fire and tui each build their own real catalog now — from
+    // `.oat/plugins.toml` and its snapshot (F5). `_catalog` stays part of the signature so
+    // existing callers (and every test built against it) do not have to change.
     match cli.command {
-        TopCommand::Meta { command } => commands::meta::run(command, env, catalog),
-        TopCommand::Role { command } => commands::role::run(command, env, catalog, exec),
+        TopCommand::Meta { command } => commands::meta::run(command, env),
+        TopCommand::Role { command } => commands::role::run(command, env, exec),
         TopCommand::Run { command } => commands::run::run(command, env),
         TopCommand::Dispatch { command } => commands::dispatch::run(command, env),
         TopCommand::Log { command } => commands::log::run(command, env),
@@ -128,8 +141,10 @@ pub fn execute_with_exec(
             let log = event_log::EventLog::open(env);
             env::commands::execute(env, &log, command)
         }
-        TopCommand::Console { command } => commands::console::run(command, env, catalog),
-        TopCommand::Tui => commands::tui::run(env, catalog),
+        TopCommand::Console { command } => commands::console::run(command, env),
+        TopCommand::Tui => commands::tui::run(env),
+        TopCommand::Init(args) => commands::init::run(args, env),
+        TopCommand::Plugin { command } => commands::plugin::run(command, env),
     }
 }
 
