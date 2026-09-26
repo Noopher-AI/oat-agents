@@ -73,6 +73,5 @@ project-level skill of the name a role declares), `tmux_missing`.
 
 ## Claude Code workspace trust
 
-A launch on Claude Code checks whether its worktree is a trusted workspace and reports the
-current state; pass `--trust-workspace` to `meta fire` or `role fire` to have the launch
-record it as trusted instead of leaving the dialog for the agent to hit.
+Pass `--trust-workspace` to `meta fire` or `role fire` to have the launch record its worktree
+as trusted instead of leaving the dialog for the agent to hit.
