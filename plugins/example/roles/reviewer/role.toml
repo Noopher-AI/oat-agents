@@ -1,0 +1,4 @@
+description = "Checks a worker's change against its task independently and returns PASS or FAIL with evidence."
+start = "existing"
+exec_environment = true
+prior_verification = true
