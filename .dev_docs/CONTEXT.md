@@ -112,5 +112,4 @@ the profile it expects; the machine says how it provides it.
 
 | Word | Why |
 |---|---|
-| Any name, prefix or environment variable of the tool this was ported from | This is a separate project. An old name in code or docs sends readers looking for a tool they cannot see. |
 | **agent** alone, where a role or a Dispatch is meant | "The agent failed" does not say whether a role is wrong or one attempt failed. |

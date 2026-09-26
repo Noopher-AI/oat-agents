@@ -36,4 +36,3 @@ citation does not resolve or a record is missing from the list below.
 | --- | --- |
 | ADR-0001 | The core owns the mechanism; how a team works enters through a plugin |
 | ADR-0002 | The core ships only `oat-meta` and `oat-console`; every other role comes from a plugin |
-| ADR-0003 | The core is ported without its history |

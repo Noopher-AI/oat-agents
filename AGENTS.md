@@ -1,6 +1,6 @@
 # Working in oat-agents
 
-This file is the rules. `CLAUDE.md` only includes it, so every agent backend reads the same text.
+This file is the rules for every agent working in this repository, whichever backend runs it.
 
 ## Read before you change anything
 
@@ -15,11 +15,6 @@ This file is the rules. `CLAUDE.md` only includes it, so every agent backend rea
 Everything pushed here — every branch, commit, issue and pull request — is public and stays
 public, even after it is deleted.
 
-- The core was ported from a private in-house tool **without its history** (ADR-0003). When a
-  ticket ports code from that tool, read only the files the ticket's Scope lists. Nothing
-  that describes how a particular organisation works — its conventions, its workflows, its
-  incidents, its machines, its internal names — enters this repository. When in doubt,
-  leave it out and ask.
 - Never commit credentials, machine names, cluster contexts or private repository paths.
 
 ## Core and plugins
