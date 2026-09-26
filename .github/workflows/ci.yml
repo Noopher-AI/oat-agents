@@ -1,10 +1,8 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main, 'epic/**']
   push:
-    branches: [main, 'epic/**']
+    branches: [main]
 
 jobs:
   dev-docs:
