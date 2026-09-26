@@ -76,6 +76,7 @@ impl DispatchRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum MessageKind {
     WorkerDone,
     Question,

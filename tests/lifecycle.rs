@@ -334,7 +334,7 @@ fn a_run_goes_from_delegation_to_finish() {
     let wait_for_question = parse(&["run", "wait", "--run", &run_id, "--ack", "--timeout-ms", "5000"]);
     let question_delivery = run_json(wait_for_question, &meta_env, &catalog);
     assert_eq!(question_delivery["timed_out"], false);
-    assert_eq!(question_delivery["messages"][0]["kind"], "Question");
+    assert_eq!(question_delivery["messages"][0]["kind"], "question");
     let question_seq = question_delivery["messages"][0]["seq"].as_u64().unwrap();
 
     let reply_cli = parse(&[
@@ -357,7 +357,7 @@ fn a_run_goes_from_delegation_to_finish() {
     let wait_cli = parse(&["run", "wait", "--run", &run_id, "--ack", "--timeout-ms", "5000"]);
     let wait_result = run_json(wait_cli, &meta_env, &catalog);
     assert_eq!(wait_result["timed_out"], false);
-    assert_eq!(wait_result["messages"][0]["kind"], "WorkerDone");
+    assert_eq!(wait_result["messages"][0]["kind"], "worker_done");
 
     // The coordinator releases the Dispatch and its worktree, then finishes the Run.
     let release_cli = parse(&["dispatch", "release", "--dispatch", &dispatch_id, "--run", &run_id, "--remove-worktree", "--force"]);
