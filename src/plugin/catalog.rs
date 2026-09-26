@@ -147,9 +147,27 @@ fn combine_core_role<'a>(
         }
     }
 
+    let mut backend = None;
+    let mut backend_owner: Option<&str> = None;
+    for (plugin, core) in &contributions {
+        let Some(chosen) = core.backend else {
+            continue;
+        };
+        if let Some(existing_plugin) = backend_owner {
+            errors.push(PluginError::combination(format!(
+                "the backend for {instruction_file} is chosen by both plugin '{existing_plugin}' and plugin '{}'",
+                plugin.name
+            )));
+            continue;
+        }
+        backend_owner = Some(plugin.name.as_str());
+        backend = Some(chosen);
+    }
+
     Some(CoreRoleDefinition {
         instructions,
         models,
         skills,
+        backend,
     })
 }

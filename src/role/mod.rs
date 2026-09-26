@@ -92,6 +92,8 @@ pub struct CoreRoleDefinition {
     pub instructions: String,
     pub models: BTreeMap<Backend, ModelSetting>,
     pub skills: Vec<SkillRef>,
+    /// The backend a plugin chose for this core role; only the console takes one.
+    pub backend: Option<Backend>,
 }
 
 /// Given a role name, its definition; nothing else in the crate knows where roles come from

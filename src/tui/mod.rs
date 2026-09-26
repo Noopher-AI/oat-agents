@@ -1750,32 +1750,20 @@ pub fn console_state(console: &ConsoleHandle, projects_root: Option<PathBuf>) ->
 /// that is not running launches it, which takes seconds and blocks the keyboard meanwhile.
 struct PendingConsole {
     repo: PathBuf,
-    backend: String,
     /// It replaces the console already on screen instead of opening over whatever was there.
     in_place: bool,
 }
 
-/// The repository `ctrl+\\` opens a console for: the open Run's, else the Run under the
-/// picker's cursor, else the directory the view was started in.
-fn console_target(open: Option<&TuiState>, picker: &Picker) -> Option<(PathBuf, String)> {
-    let backend = |backend: &str| {
-        if backend.is_empty() {
-            "claude".to_owned()
-        } else {
-            backend.to_owned()
-        }
-    };
-    if let Some(state) = open {
-        if let Some(repo) = state.repo.clone() {
-            return Some((repo, backend(&state.backend)));
-        }
-    }
-    if let Some(run) = picker.list.selected() {
-        if let Some(repo) = run.repo.clone() {
-            return Some((PathBuf::from(repo), backend(&run.backend)));
-        }
-    }
-    std::env::current_dir().ok().map(|dir| (dir, "claude".to_owned()))
+/// The repository `ctrl+\\` opens a console for: the one the view was started in (ADR-0005),
+/// found from the git top level so a subdirectory reaches it too, whichever Run is on screen.
+fn console_target(start: &Path) -> PathBuf {
+    let repo = crate::worktree::run_git(start, &["rev-parse", "--show-toplevel"])
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
+        .filter(|repo| !repo.as_os_str().is_empty())
+        .unwrap_or_else(|| start.to_path_buf());
+    repo
 }
 
 fn event_loop(
@@ -1787,6 +1775,7 @@ fn event_loop(
     checklist_store: Option<&ChecklistStore>,
 ) -> Result<()> {
     let mut picker = Picker::new(model::run_summaries(store, log));
+    let console_repo = std::env::current_dir().ok().map(|dir| console_target(&dir));
     let mut usage = SpendIndex::default();
     // Reading every Run's transcripts once fills the picker's costs; the index then re-reads
     // only what changes.
@@ -1826,7 +1815,7 @@ fn event_loop(
         }
         // The frame saying the console is starting is on screen; now start it.
         if let Some(console) = pending.take() {
-            let notice = match control.console(&console.repo, &console.backend) {
+            let notice = match control.console(&console.repo) {
                 Ok(handle) => {
                     let mut state = console_state(&handle, projects_root.clone());
                     state.refresh_spend(&mut usage);
@@ -1867,7 +1856,7 @@ fn event_loop(
                         // Already there: the key is a toggle, so it goes back to whatever
                         // was open before.
                         open = parked.take();
-                    } else if let Some((repo, backend)) = console_target(open.as_ref(), &picker) {
+                    } else if let Some(repo) = console_repo.clone() {
                         let notice = Notice::new(if control.console_live(&repo) {
                             "opening the console…"
                         } else {
@@ -1879,7 +1868,6 @@ fn event_loop(
                         }
                         pending = Some(PendingConsole {
                             repo,
-                            backend,
                             in_place: false,
                         });
                     }
@@ -1979,7 +1967,6 @@ fn event_loop(
                     state.set_notice(Notice::new("the console's session is gone; restarting it…"));
                     pending = Some(PendingConsole {
                         repo,
-                        backend: state.backend.clone(),
                         in_place: true,
                     });
                 }

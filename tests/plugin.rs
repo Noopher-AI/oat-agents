@@ -366,3 +366,26 @@ fn an_unknown_field_names_the_file() {
     assert!(text.contains("oat-plugin.toml"), "{text}");
     assert!(text.contains("nickname"), "the unknown field is named: {text}");
 }
+
+#[test]
+fn only_the_console_may_choose_its_backend_and_only_a_known_one() {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = tmp.path().join("plugin-a");
+    write_manifest(&a, "plugin-a");
+    write_core_instruction(&a, "oat-meta", "Coordinate.");
+    write_core_instruction(&a, "oat-console", "Observe.");
+    std::fs::write(a.join("core/oat-meta.toml"), "backend = \"codex\"\n").unwrap();
+    std::fs::write(a.join("core/oat-console.toml"), "backend = \"gemini\"\n").unwrap();
+
+    let text = errors_text(&load::load_plugin(&a).unwrap_err());
+    assert!(text.contains("core/oat-meta.toml sets `backend`"), "{text}");
+    assert!(text.contains("unknown backend 'gemini'"), "{text}");
+
+    std::fs::write(a.join("core/oat-meta.toml"), "").unwrap();
+    std::fs::write(a.join("core/oat-console.toml"), "backend = \"codex\"\n").unwrap();
+    let loaded = load::load_plugin(&a).unwrap();
+    assert_eq!(
+        loaded.console.unwrap().backend,
+        Some(oat_agents::role::Backend::Codex)
+    );
+}

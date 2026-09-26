@@ -96,11 +96,11 @@ impl Control for RecordingControl {
         self.consoles.contains_key(repo)
     }
 
-    fn console(&self, repo: &Path, backend: &str) -> Result<ConsoleHandle> {
-        self.record(format!("console {} {backend}", repo.display()));
+    fn console(&self, repo: &Path) -> Result<ConsoleHandle> {
+        self.record(format!("console {}", repo.display()));
         Ok(ConsoleHandle {
             repo: repo.to_path_buf(),
-            backend: backend.to_string(),
+            backend: "claude".to_string(),
             started_at: now_iso(),
             session: self
                 .consoles
@@ -533,7 +533,7 @@ fn the_checklist_panel_shows_the_runs_items_and_how_many_are_done() {
 #[test]
 fn the_console_window_has_a_screen_and_a_log_and_nothing_to_close_but_itself() {
     let control = RecordingControl::default();
-    let handle = control.console(Path::new("/repos/pottery"), "claude").unwrap();
+    let handle = control.console(Path::new("/repos/pottery")).unwrap();
     let mut state = console_state(&handle, None);
     assert_eq!(state.agents().len(), 1);
     state.selected = 1;
@@ -552,18 +552,18 @@ fn the_console_window_has_a_screen_and_a_log_and_nothing_to_close_but_itself() {
 }
 
 #[test]
-fn the_console_key_opens_the_repository_of_the_run_in_view() {
-    let fx = fixture();
-    let picker = fx.picker();
-    let state = fx.state();
-    assert_eq!(
-        console_target(Some(&state), &picker),
-        Some((PathBuf::from("/repos/pottery"), "claude".to_string()))
-    );
-    assert_eq!(
-        console_target(None, &picker),
-        Some((PathBuf::from("/repos/pottery"), "claude".to_string()))
-    );
+fn the_console_key_opens_the_repository_the_view_was_started_in() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = dir.path().canonicalize().unwrap();
+    assert!(std::process::Command::new("git").arg("init").arg("-q").arg(&repo).status().unwrap().success());
+    let inside = repo.join("src").join("deep");
+    std::fs::create_dir_all(&inside).unwrap();
+    assert_eq!(console_target(&inside), repo);
+
+    let outside = tempfile::tempdir().unwrap();
+    let plain = outside.path().canonicalize().unwrap();
+    assert_eq!(console_target(&plain), plain, "outside a repository it is the directory itself");
+
     assert!(is_console_toggle(&ctrl('\\')));
     assert!(is_console_toggle(&key(KeyCode::F(2))));
 }

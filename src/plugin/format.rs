@@ -55,6 +55,11 @@ pub struct RoleToml {
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CoreRoleToml {
+    /// The backend the core role runs on. Only `core/oat-console.toml` may set it: the console
+    /// is launched from no command that could choose one, while `oat-meta`'s backend is the
+    /// Run's, chosen by `meta fire --agent`.
+    #[serde(default)]
+    pub backend: Option<String>,
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]

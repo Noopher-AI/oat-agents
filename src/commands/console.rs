@@ -18,8 +18,9 @@ pub enum ConsoleCommand {
 pub struct OpenArgs {
     #[arg(long)]
     pub repo: PathBuf,
-    #[arg(long, default_value = "claude")]
-    pub agent: String,
+    /// The backend to run on when the repository's plugins do not choose one.
+    #[arg(long)]
+    pub agent: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -37,7 +38,7 @@ pub fn run(command: ConsoleCommand, env: &dyn Environment) -> Result<Value> {
 }
 
 fn open(args: OpenArgs, env: &dyn Environment) -> Result<Value> {
-    let backend = Backend::from_str(&args.agent)?;
+    let backend = args.agent.as_deref().map(Backend::from_str).transpose()?;
     let record = console::open(env, &args.repo, backend)?;
     Ok(json!({"repo": record.repo, "backend": record.backend, "session": record.session}))
 }
