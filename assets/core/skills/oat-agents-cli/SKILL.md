@@ -1,0 +1,78 @@
+---
+name: oat-agents-cli
+description: Guide a human through starting, observing, and taking over an oat-agents Run — git worktrees, tmux sessions, and the file-based Run inbox. Use when the user asks how to use oat-agents, wants to launch a Big Plan with meta fire, inspect a Dispatch, or handle Run inbox lifecycle commands.
+---
+
+# oat-agents CLI
+
+`oat-agents` runs a supervised team of coding agents on one machine. This skill covers the
+commands a human uses to start, observe and take over a Run.
+
+## Starting a Run
+
+`oat-agents meta fire --prompt "<the Big Plan>" [--repo <path>] [--name <run-name>]
+[--base-branch <branch>] [--agent claude|codex] [--trust-workspace]`
+
+This is the human entry point: it creates the Run, the coordinator's (`oat-meta`) worktree
+and branch, and launches its tmux session. Exactly one of `--prompt` or `--input-file` is
+required. `--agent` picks the backend; with no model set anywhere, a role runs on its
+backend's own default.
+
+## Delegating inside a Run
+
+`role fire <role> [--from <worktree>] [--name <launch-name>] --prompt <text> |
+--input-file <path>` belongs to the coordinator's own session — it fails with
+`run_not_bound` outside one, because it reads `OAT_RUN_ID` from the environment. `--from` is
+required for a role that starts in an existing Dispatch's worktree, and refused for one that
+starts fresh.
+
+## Observing a Run without taking it over
+
+- `dispatch show --dispatch <id> [--run <id>]` — a Dispatch's record and whether its session
+  is still alive.
+- `dispatch read --dispatch <id> [--source auto|transcript|terminal] [--limit <n>]` — its
+  transcript or terminal screen.
+- `log show [--run <id>] [--agent <name>] [--event <name>] [--since <ts>] [--limit <n>]
+  [--format text|json]`, `log agents`, `log runs` — the workflow log, the one place an
+  observer reads a Run from.
+- `big-plan show [--run <id>]`, `big-plan list` — the Big Plan a Run was fired with.
+
+None of these consume the Run inbox. **The Run inbox has exactly one consumer: that Run's
+`oat-meta`.** Taking a delivery from it as an observer leaves the coordinator waiting for a
+message that is already gone.
+
+## Taking over the Run inbox
+
+Only do this in place of the coordinator, deliberately — for example when it has stalled and
+you are stepping in:
+
+- `run wait --run <id> [--ack] [--timeout-ms <ms>]` — blocks for the next delivery; on
+  timeout it carries a liveness report.
+- `run ack --run <id> --delivery <id>` — acknowledges a delivery so it is not redelivered.
+- `run reply --run <id> --message <seq> --prompt <text> | --input-file <path>` — answers one
+  message so its sender's `dispatch ask` unblocks.
+
+## Releasing and finishing
+
+- `dispatch release --dispatch <id> [--run <id>] [--remove-worktree] [--force]` — ends a
+  Dispatch's session; `--remove-worktree` also removes its worktree, subject to the same
+  terms as `run clean` (kept, with a reason, if it is not clean). This is not free: a
+  released Dispatch's worktree is gone, along with anything in it nobody committed.
+- `meta finish --run <id>` — closes the Run, prints its receipt, and cleans up.
+- `run clean --run <id> | --all --force` — removes every settled Run's remaining worktrees;
+  fails with `run_still_open` on a Run that has not been finished yet.
+
+## Errors
+
+Every failure is JSON on stderr with a stable `code` and a nonzero exit status. Common ones:
+`run_not_bound` / `dispatch_not_bound` (missing `--run`/`--dispatch` and no matching
+environment variable), `already_settled` (a second `dispatch done` or `meta finish`),
+`run_still_open` (`run clean` on an unfinished Run), `unknown_role`, `invalid_role_option` /
+`role_source_required` (`--from` misused), `skill_conflict` (a repository already has a
+project-level skill of the name a role declares), `tmux_missing`.
+
+## Claude Code workspace trust
+
+A launch on Claude Code checks whether its worktree is a trusted workspace and reports the
+current state; pass `--trust-workspace` to `meta fire` or `role fire` to have the launch
+record it as trusted instead of leaving the dialog for the agent to hit.
