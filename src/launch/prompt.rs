@@ -1,4 +1,5 @@
 use crate::role::Backend;
+use std::collections::BTreeSet;
 
 pub const PREAMBLE_CORE_ROLE: &str = include_str!("../../assets/core/preamble-core-role.md");
 pub const PREAMBLE_ROLE: &str = include_str!("../../assets/core/preamble-role.md");
@@ -25,20 +26,58 @@ pub struct PromptParts<'a> {
     pub task: &'a str,
 }
 
-/// Rewrites a `$skill-name` reference for the backend that spells it differently
-/// (ADR-0002). No core skill in this ticket uses one, so this is a trivial identity today,
-/// kept as the one hook `assemble` calls so a later ticket does not have to find a new seam.
-pub fn rewrite_skill_references(text: &str, _backend: Backend) -> String {
-    text.to_string()
+/// Rewrites a `$skill-name` reference for the backend that spells it differently (ADR-0002):
+/// Claude Code reads a plain `skill-name`, so the leading `$` is dropped; Codex reads the
+/// reference as written, so the text passes through unchanged. Used both for instruction and
+/// baseline text here, and for a skill's own `SKILL.md` at materialization time
+/// (`launch::skills::write_skill_files`) — never for a skill's other files, which are not
+/// prose and carry no such reference.
+///
+/// Only a `$name` where `name` is one of `known_skills` is rewritten — a bare regex over any
+/// identifier-shaped run of characters would also corrupt a literal shell variable reference
+/// (`$HOME`, `$PATH`, `$1`) that a role's instructions or a skill's own `SKILL.md` happen to
+/// show in an example command.
+pub fn rewrite_skill_references(text: &str, backend: Backend, known_skills: &BTreeSet<String>) -> String {
+    if backend != Backend::Claude {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '$' && chars.peek().is_some_and(|n| is_skill_name_char(*n)) {
+            let mut name = String::new();
+            while let Some(&next) = chars.peek() {
+                if is_skill_name_char(next) {
+                    name.push(next);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            if known_skills.contains(&name) {
+                out.push_str(&name);
+            } else {
+                out.push('$');
+                out.push_str(&name);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn is_skill_name_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '-' || c == '_'
 }
 
 /// preamble -> core baseline (core role) or role protocol (plugin role) -> the catalog's
 /// instructions, joined in order -> the task (ADR-0004's fixed order).
-pub fn assemble(parts: PromptParts<'_>, backend: Backend) -> String {
+pub fn assemble(parts: PromptParts<'_>, backend: Backend, known_skills: &BTreeSet<String>) -> String {
     let mut sections = vec![parts.preamble];
-    sections.push(rewrite_skill_references(parts.baseline, backend));
+    sections.push(rewrite_skill_references(parts.baseline, backend, known_skills));
     for instruction in parts.instructions {
-        sections.push(rewrite_skill_references(instruction, backend));
+        sections.push(rewrite_skill_references(instruction, backend, known_skills));
     }
     sections.push(parts.task.to_string());
     sections
@@ -62,7 +101,7 @@ pub struct PreambleFields<'a> {
 
 /// Fills the preamble template's named placeholders. Kept separate from `assemble` so the
 /// preamble text itself stays plain Markdown with no templating logic embedded in it.
-pub fn render_preamble(template: &str, fields: PreambleFields<'_>) -> String {
+pub fn render_preamble(template: &str, fields: PreambleFields<'_>, known_skills: &BTreeSet<String>) -> String {
     let mut role_list = fields.role_names.to_vec();
     role_list.sort();
     let rendered = template
@@ -74,5 +113,5 @@ pub fn render_preamble(template: &str, fields: PreambleFields<'_>) -> String {
         .replace("{{ROLE_NAMES}}", &role_list.join(", "))
         .replace("{{SETTLE_COMMAND}}", fields.settle_command)
         .replace("{{LAUNCH_PROTOCOL}}", launch_protocol_for(fields.backend));
-    rewrite_skill_references(&rendered, fields.backend)
+    rewrite_skill_references(&rendered, fields.backend, known_skills)
 }

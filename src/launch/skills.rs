@@ -93,12 +93,25 @@ pub fn append_local_exclude(worktree: &Path, entry: &str) -> Result<()> {
     Ok(())
 }
 
-fn write_skill_files(dir: &Path, skill: &SkillRef) -> Result<()> {
+/// Writes a skill's files, rewriting `$skill-name` cross-references (ADR-0002) in `SKILL.md`
+/// only — never in a script or other supporting file, which are not prose and may legitimately
+/// contain a literal `$` followed by word characters (a shell variable, for instance).
+fn write_skill_files(dir: &Path, skill: &SkillRef, backend: Backend, known_skills: &BTreeSet<String>) -> Result<()> {
     for file in &skill.files {
         let path = dir.join(&file.relative_path);
         fs::create_dir_all(path.parent().unwrap())
             .map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
-        fs::write(&path, &file.contents).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
+        let contents = if file.relative_path == Path::new("SKILL.md") {
+            match std::str::from_utf8(&file.contents) {
+                Ok(text) => {
+                    crate::launch::prompt::rewrite_skill_references(text, backend, known_skills).into_bytes()
+                }
+                Err(_) => file.contents.clone(),
+            }
+        } else {
+            file.contents.clone()
+        };
+        fs::write(&path, &contents).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
         #[cfg(unix)]
         if file.executable {
             use std::os::unix::fs::PermissionsExt;
@@ -153,7 +166,7 @@ pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]
         if dir.exists() {
             fs::remove_dir_all(&dir).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
         }
-        write_skill_files(&dir, skill)?;
+        write_skill_files(&dir, skill, backend, &declared)?;
         append_local_exclude(worktree, &format!("{root_rel}/{}/", skill.name))?;
     }
 

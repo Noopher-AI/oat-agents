@@ -53,6 +53,7 @@ pub mod codes {
     pub const ROLE_SOURCE_REQUIRED: &str = "role_source_required";
     pub const UNKNOWN_ROLE: &str = "unknown_role";
     pub const CORE_ROLE_INSTRUCTIONS_MISSING: &str = "core_role_instructions_missing";
+    pub const PLUGIN_LOAD_FAILED: &str = "plugin_load_failed";
     pub const SKILL_CONFLICT: &str = "skill_conflict";
     pub const SKILL_WRITE_FAILED: &str = "skill_write_failed";
     pub const TMUX_MISSING: &str = "tmux_missing";

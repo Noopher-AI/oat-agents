@@ -5,6 +5,7 @@ pub mod error;
 pub mod event_log;
 pub mod launch;
 pub mod liveness;
+pub mod plugin;
 pub mod pricing;
 pub mod role;
 pub mod session;

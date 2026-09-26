@@ -1,0 +1,12 @@
+description = "Starts a fresh worktree, requires an execution environment, and produces its own prior verification."
+start = "fresh"
+exec_environment = true
+prior_verification = true
+skills = ["sample-skill"]
+
+[model.claude]
+model = "sample-claude-model"
+
+[model.codex]
+model = "sample-codex-model"
+reasoning_effort = "high"

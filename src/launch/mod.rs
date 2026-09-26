@@ -103,6 +103,9 @@ pub fn launch_dispatch(
         prompt::PREAMBLE_ROLE
     };
 
+    let known_skills: std::collections::BTreeSet<String> =
+        spec.skills.iter().map(|s| s.name.clone()).collect();
+
     let preamble = prompt::render_preamble(
         preamble_template,
         prompt::PreambleFields {
@@ -114,6 +117,7 @@ pub fn launch_dispatch(
             role_names: &spec.role_names_for_preamble,
             settle_command,
         },
+        &known_skills,
     );
 
     let baseline_or_protocol = if spec.is_core {
@@ -130,6 +134,7 @@ pub fn launch_dispatch(
             task: &spec.task,
         },
         spec.backend,
+        &known_skills,
     );
 
     let dispatch_dir = store.dispatch_dir_path(&spec.run.id, &dispatch_id);
