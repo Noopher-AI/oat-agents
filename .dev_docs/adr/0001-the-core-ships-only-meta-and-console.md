@@ -22,5 +22,7 @@ differently still has to pretend it has those three roles.
 - Launch commands and the coordinator's instructions cannot name plugin roles; they refer to
   roles generically, and anything role-specific (such as launching a role inside another
   Dispatch's worktree) is a property a role declares, not a special case in the core.
-- With no plugin installed, a Run has a coordinator and nothing to delegate to. The example
-  plugin is part of the first-run experience and must be kept working.
+- A Run cannot start without plugins: a repository chooses them when it is initialised, and
+  they supply both the roles and the core roles' team instructions (ADR-0002, ADR-0004). The
+  example plugin is the default choice at initialisation, so it is part of the first-run
+  experience and must be kept working.

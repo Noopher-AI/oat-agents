@@ -1,0 +1,3 @@
+format_version = 1
+name = "sample-plugin-secondary"
+description = "A second plugin used only to show that core-role team instructions from several plugins are joined in the order the plugins are listed."

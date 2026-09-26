@@ -1,0 +1,4 @@
+skills = ["sample-skill"]
+
+[model.codex]
+model = "sample-codex-console-model"

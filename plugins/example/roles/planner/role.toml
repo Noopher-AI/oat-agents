@@ -1,0 +1,3 @@
+description = "Reads the repository and turns a task into a plan a worker can follow."
+start = "fresh"
+exec_environment = false

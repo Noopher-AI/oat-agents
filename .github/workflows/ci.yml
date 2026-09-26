@@ -1,10 +1,8 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main, 'epic/**']
   push:
-    branches: [main, 'epic/**']
+    branches: [main]
 
 jobs:
   dev-docs:
@@ -12,3 +10,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: .github/scripts/check-dev-docs.sh
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --all-targets
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets -- -D warnings

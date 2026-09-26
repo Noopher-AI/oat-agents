@@ -1,0 +1,267 @@
+use super::generate_id;
+use super::run::clean_run;
+use crate::environment::Environment;
+use crate::error::{codes, err};
+use crate::event_log::{events, now_iso, EventLog, LogEntry};
+use crate::launch::{self, LaunchSpec};
+use crate::plugins;
+use crate::role::{Backend, CoreRole, RoleCatalog};
+use crate::store::{RunRecord, Store};
+use crate::worktree;
+use anyhow::Result;
+use clap::{Args, Subcommand};
+use serde_json::{json, Value};
+use std::path::PathBuf;
+use std::str::FromStr;
+
+#[derive(Subcommand, Debug)]
+pub enum MetaCommand {
+    Fire(FireArgs),
+    Finish(FinishArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct FireArgs {
+    #[arg(long)]
+    pub prompt: Option<String>,
+    #[arg(long)]
+    pub input_file: Option<PathBuf>,
+    #[arg(long, default_value = ".")]
+    pub repo: PathBuf,
+    #[arg(long)]
+    pub name: Option<String>,
+    #[arg(long)]
+    pub base_branch: Option<String>,
+    #[arg(long, default_value = "claude")]
+    pub agent: String,
+    #[arg(long)]
+    pub trust_workspace: bool,
+    /// The execution profile this Run's roles should use. Defaults to the repository's
+    /// `default_profile`; `--no-exec` overrides either and gives the Run none at all.
+    #[arg(long, value_name = "NAME")]
+    pub exec_profile: Option<String>,
+    #[arg(long)]
+    pub no_exec: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct FinishArgs {
+    #[arg(long)]
+    pub run: Option<String>,
+}
+
+pub fn run(command: MetaCommand, env: &dyn Environment) -> Result<Value> {
+    match command {
+        MetaCommand::Fire(args) => fire(args, env),
+        MetaCommand::Finish(args) => finish(args, env),
+    }
+}
+
+fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
+    let big_plan = crate::resolve_text_input(&args.prompt, &args.input_file)?;
+    let backend = Backend::from_str(&args.agent)?;
+    let repo = args
+        .repo
+        .canonicalize()
+        .map_err(|e| err(codes::INVALID_INPUT, format!("invalid --repo: {e}")))?;
+
+    // The gate (ticket Scope): an uninitialised repository or an untrusted plugin stops the Run
+    // before a worktree, a branch or a run record exists.
+    let (resolved, catalog) = plugins::gate(&repo, env)?;
+    let catalog = &catalog;
+    let core_role = catalog.core_role(CoreRole::Meta)?;
+
+    let run_name = args
+        .name
+        .clone()
+        .unwrap_or_else(|| generate_id("run"));
+    let run_id = worktree::sanitize_segment(&run_name);
+
+    let base_branch = match args.base_branch {
+        Some(b) => b,
+        None => worktree::default_branch(&repo)?,
+    };
+    let base_commit_output = worktree::run_git(&repo, &["rev-parse", &base_branch])?;
+    if !base_commit_output.status.success() {
+        return Err(err(
+            codes::INVALID_INPUT,
+            format!("unknown base branch '{base_branch}'"),
+        ));
+    }
+    let base_commit = String::from_utf8_lossy(&base_commit_output.stdout)
+        .trim()
+        .to_string();
+
+    let branch = worktree::branch_name(&run_id, "meta");
+    let path = worktree::worktree_path(&repo, &run_id, "meta");
+    worktree::create_worktree(&repo, &path, &branch, &base_commit)?;
+
+    if backend == Backend::Claude {
+        let _ = launch::write_claude_local_settings(&path);
+        if args.trust_workspace {
+            let _ = launch::trust_claude_workspace(env, &path);
+        }
+    }
+
+    let store = Store::open(env)?;
+    let log = EventLog::open(env);
+    let dispatch_id = generate_id("dispatch");
+
+    // Every later catalog for this Run is built from this copy, not by re-reading
+    // `.oat/plugins.toml` (ticket Architecture: "Snapshot").
+    let plugin_records = plugins::snapshot::snapshot_plugins(&resolved, &store.run_plugin_snapshot_dir(&run_id))?;
+
+    let run_record = RunRecord {
+        id: run_id.clone(),
+        name: run_id.clone(),
+        repo: repo.to_string_lossy().to_string(),
+        base_branch: base_branch.clone(),
+        backend: format!("{backend:?}").to_lowercase(),
+        created_at: now_iso(),
+        closed_at: None,
+        plugins: plugin_records.clone(),
+        meta_worktree: Some(path.to_string_lossy().to_string()),
+        meta_dispatch_id: Some(dispatch_id.clone()),
+        big_plan: Some(big_plan.clone()),
+    };
+    store.create_run(&run_record)?;
+
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: None,
+        agent: None,
+        event: events::RUN_CREATED.to_string(),
+        details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "big_plan": big_plan})),
+    })?;
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: None,
+        agent: None,
+        event: events::PLUGINS_RESOLVED.to_string(),
+        details: Some(json!({"plugins": plugin_records})),
+    })?;
+
+    // The Run's execution profile is chosen once, here, and every role launch inherits it
+    // (ticket Scope): `meta fire` selects it explicitly, from the repository's default, or not
+    // at all with `--no-exec`. Whether any given role actually gets an environment is still
+    // that role's own `exec_environment` field (ADR-0001's consequence: no role name is
+    // consulted here).
+    if !args.no_exec {
+        let exec_config = crate::env::config::load(env, Some(&repo))?;
+        match crate::env::config::resolve(&exec_config, args.exec_profile.as_deref()) {
+            Ok((profile_name, _)) => {
+                crate::env::state::EnvStore::open(env)?.save_run_profile(&run_id, &profile_name)?;
+            }
+            Err(error) if args.exec_profile.is_some() => return Err(error),
+            Err(_) => {
+                // No profile was requested and the repository has no default: the Run simply
+                // has none, which is not an error until a role that needs one is launched.
+            }
+        }
+    }
+
+    let model = core_role
+        .models
+        .get(&backend)
+        .cloned()
+        .unwrap_or_default();
+
+    let spec = LaunchSpec {
+        run: run_record.clone(),
+        role_label: CoreRole::Meta.name().to_string(),
+        is_core: true,
+        worktree: path.clone(),
+        branch: branch.clone(),
+        backend,
+        baseline: crate::launch::prompt::OAT_META_BASELINE.to_string(),
+        instructions: vec![core_role.instructions.clone()],
+        task: big_plan,
+        skills: core_role.skills.clone(),
+        model: model.clone(),
+        role_names_for_preamble: catalog.role_names(),
+        created_fresh_worktree: true,
+        repo: repo.clone(),
+    };
+
+    let (dispatch, dispatch_dir) = launch::launch_dispatch(
+        env,
+        &store,
+        &log,
+        spec,
+        dispatch_id.clone(),
+        (model.model.clone(), model.reasoning_effort.clone()),
+    )?;
+
+    Ok(json!({
+        "run_id": run_id,
+        "dispatch_id": dispatch.id,
+        "worktree": dispatch.worktree,
+        "branch": dispatch.branch,
+        "dispatch_dir": dispatch_dir.to_string_lossy(),
+    }))
+}
+
+fn finish(args: FinishArgs, env: &dyn Environment) -> Result<Value> {
+    let run_id = args
+        .run
+        .or_else(|| env.var("OAT_RUN_ID"))
+        .ok_or_else(|| err(codes::RUN_NOT_BOUND, "no run bound; pass --run or set OAT_RUN_ID"))?;
+
+    let store = Store::open(env)?;
+    let log = EventLog::open(env);
+    let mut run_record = store.load_run(&run_id)?;
+    if !run_record.is_open() {
+        return Err(err(codes::ALREADY_SETTLED, format!("run '{run_id}' is already closed")));
+    }
+
+    run_record.closed_at = Some(now_iso());
+    store.save_run(&run_record)?;
+
+    let meta_dispatch_id = run_record.meta_dispatch_id.clone();
+    if let Some(dispatch_id) = &meta_dispatch_id {
+        if let Ok(mut dispatch) = store.load_dispatch(&run_id, dispatch_id) {
+            if dispatch.settled.is_none() {
+                dispatch.settled = Some(crate::store::Settlement::Succeeded);
+                dispatch.released_at = Some(now_iso());
+                store.save_dispatch(&dispatch)?;
+            }
+        }
+    }
+
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: meta_dispatch_id.clone(),
+        agent: Some(CoreRole::Meta.name().to_string()),
+        event: events::AGENT_EXIT.to_string(),
+        details: None,
+    })?;
+    log.record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: None,
+        agent: None,
+        event: events::RUN_CLOSED.to_string(),
+        details: None,
+    })?;
+
+    let cleanup = clean_run(env, &store, &run_id, false)?;
+    let receipt = json!({
+        "run_id": run_id,
+        "closed_at": run_record.closed_at,
+        "cleanup": cleanup,
+    });
+
+    // The receipt above is what settles the Run; killing the coordinator's own tmux session
+    // is the last thing that happens, after cleanup is scheduled, never before.
+    if let Some(dispatch_id) = &meta_dispatch_id {
+        let tmux = crate::session::tmux::Tmux::from_env(env);
+        let hid = crate::event_log::hash_id("meta", &run_record.name, dispatch_id);
+        let session = crate::session::tmux::Tmux::session_name(&hid);
+        let _ = tmux.kill_session(&session);
+    }
+
+    Ok(receipt)
+}
