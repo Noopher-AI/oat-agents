@@ -433,13 +433,26 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     state.on_key_with(key(KeyCode::Enter), &control);
     assert_eq!(state.view(), View::Detail);
     assert_eq!(state.tab(), Tab::Live);
-    assert!(state.typing(), "the live tab starts typing at the agent");
+    assert!(!state.typing(), "the live tab opens watching, not typing");
     state.refresh_preview(&control);
 
     let text = screen(120, 30, |frame| draw(frame, &mut state));
-    assert!(text.contains("running 3 tests"), "{text}");
-    assert!(text.contains("live · typing (ctrl+] leaves)"), "{text}");
+    assert!(text.contains("running 3 tests"), "the screen shows while watching:\n{text}");
+    assert!(text.contains("live · enter to type"), "{text}");
     state.fit_preview(&control);
+
+    // Watching, keys stay with the view: j scrolls back rather than reaching the agent.
+    state.on_key_with(key(KeyCode::Char('j')), &control);
+    assert!(
+        !control.calls().iter().any(|call| call.starts_with("type ")),
+        "{:?}",
+        control.calls()
+    );
+
+    state.on_key_with(key(KeyCode::Enter), &control);
+    assert!(state.typing(), "enter steps into the agent's terminal");
+    let text = screen(120, 30, |frame| draw(frame, &mut state));
+    assert!(text.contains("live · typing (ctrl+] leaves)"), "{text}");
 
     state.on_key_with(key(KeyCode::Char('q')), &control);
     state.on_key_with(key(KeyCode::Enter), &control);
@@ -453,6 +466,7 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     assert!(!state.typing());
     state.on_key_with(key(KeyCode::Tab), &control);
     assert_eq!(state.tab(), Tab::Diff);
+    assert!(!state.typing());
     state.on_key_with(key(KeyCode::Tab), &control);
     assert_eq!(state.tab(), Tab::Log);
     state.on_key_with(key(KeyCode::Esc), &control);
@@ -472,7 +486,6 @@ fn the_diff_tab_shows_what_the_worktree_changed() {
     let mut state = fx.state();
     select(&mut state, "worker");
     state.open_detail(&control);
-    state.on_key_with(ctrl(']'), &control);
     state.on_key_with(key(KeyCode::Tab), &control);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("added line"), "{text}");
