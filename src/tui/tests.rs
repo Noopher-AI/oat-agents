@@ -88,10 +88,6 @@ impl Control for RecordingControl {
         })
     }
 
-    fn diff_stat(&self, worktree: &Path, base: &str) -> Result<(u32, u32)> {
-        self.diff(worktree, base).map(|report| (report.added, report.removed))
-    }
-
     fn console_live(&self, repo: &Path) -> bool {
         self.consoles.contains_key(repo)
     }

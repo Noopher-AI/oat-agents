@@ -52,7 +52,6 @@ pub trait Control {
     fn resize(&self, session: &str, cols: u16, rows: u16) -> Result<()>;
     fn is_alive(&self, session: &str) -> bool;
     fn diff(&self, worktree: &Path, base: &str) -> Result<DiffReport>;
-    fn diff_stat(&self, worktree: &Path, base: &str) -> Result<(u32, u32)>;
     /// Whether `repo`'s console has a live session to show right now.
     fn console_live(&self, repo: &Path) -> bool;
     /// Opens `repo`'s console, creating it on first use on the backend its plugins choose;
@@ -144,10 +143,6 @@ impl Control for RealControl<'_> {
             removed,
             text: crate::worktree::diff(worktree, base)?,
         })
-    }
-
-    fn diff_stat(&self, worktree: &Path, base: &str) -> Result<(u32, u32)> {
-        crate::worktree::diff_stat(worktree, base)
     }
 
     fn console_live(&self, repo: &Path) -> bool {

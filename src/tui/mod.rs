@@ -71,8 +71,6 @@ const BUSY_FOR: Duration = Duration::from_millis(2000);
 /// How many live sessions the roster captures each poll for its spinners;
 /// past that it only asks whether they exist.
 const SPINNER_ROWS: usize = 12;
-/// Every fifth poll the roster re-counts each live worktree's diff.
-const DIFF_EVERY: u64 = 5;
 
 /// Which events the timeline shows.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -220,7 +218,6 @@ pub struct SessionInfo {
     pub alive: bool,
     last_hash: Option<[u8; 32]>,
     pub changed_at: Option<Instant>,
-    pub diff_stat: Option<(u32, u32)>,
 }
 
 pub struct TuiState {
@@ -271,7 +268,6 @@ pub struct TuiState {
     sessions: HashMap<String, SessionInfo>,
     /// The Run the operator is about to close, awaiting a yes.
     closing: bool,
-    tick: u64,
     /// This is the console's window rather than a Run's: the console
     /// belongs to no Run (ADR-0005), so there is no Run here to close or to read.
     pub(crate) console: bool,
@@ -323,7 +319,6 @@ impl TuiState {
             diff: None,
             sessions: HashMap::new(),
             closing: false,
-            tick: 0,
             console: false,
             typing: false,
             session_lost: false,
@@ -412,11 +407,9 @@ impl TuiState {
     }
 
     /// Asks each live session whether it exists and whether its screen has
-    /// moved, and every few polls what its worktree has changed. Cheap per
-    /// row, and bounded: a roster of dozens only gets the existence check.
+    /// moved. Cheap per row, and bounded: a roster of dozens only gets the
+    /// existence check.
     pub fn refresh_sessions(&mut self, control: &dyn Control) {
-        self.tick += 1;
-        let count_diffs = self.tick % DIFF_EVERY == 1;
         let live: Vec<AgentRow> = self
             .agents
             .iter()
@@ -436,12 +429,6 @@ impl TuiState {
                         info.last_hash = Some(hash);
                         info.changed_at = Some(Instant::now());
                     }
-                }
-            }
-            if count_diffs {
-                if let (Some(worktree), Some(base)) = (agent.worktree.as_deref(), agent.base.as_deref())
-                {
-                    info.diff_stat = control.diff_stat(Path::new(worktree), base).ok();
                 }
             }
         }
@@ -640,10 +627,6 @@ impl TuiState {
             }
             _ => ("●", Color::Green),
         }
-    }
-
-    pub fn diff_stat_of(&self, hash_id: &str) -> Option<(u32, u32)> {
-        self.sessions.get(hash_id).and_then(|info| info.diff_stat)
     }
 
     /// The tabs the open agent's page has. A finished agent has only its
@@ -1540,10 +1523,10 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
     let hints = menu::lines(&state.menu(), frame.area().width);
     let areas = Layout::vertical([
         Constraint::Length(1),
-        // The roster holds a row per agent, the "all agents" row, and the
-        // rule between the live ones and the finished ones.
+        // The roster holds two lines per agent, the "all agents" row, and
+        // the rule between the live ones and the finished ones.
         Constraint::Length(
-            (state.agents.len() as u16 + 1 + roster_rule(state) as u16).clamp(2, 9) + 2,
+            (state.agents.len() as u16 * 2 + 1 + roster_rule(state) as u16).clamp(2, 13) + 2,
         ),
         Constraint::Min(3),
         Constraint::Length(hints.len() as u16 + 1),
@@ -1602,7 +1585,7 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
             state.status_glyph(agent, now, now_ms)
         };
         let name = Style::new().fg(color).add_modifier(Modifier::BOLD);
-        let mut spans = vec![
+        let spans = vec![
             Span::styled(format!("{mark} "), Style::new().fg(mark_color)),
             Span::styled(format!("{:<width$}", agent.hash_id, width = column), name),
             Span::styled(
@@ -1636,6 +1619,11 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                 ),
                 Style::new().fg(Color::White),
             ),
+        ];
+        // The second line, under the name: what it has spent, how it
+        // stands, and where its commands run.
+        let mut more = vec![
+            Span::raw("  "),
             Span::styled(
                 match state.spend_of(&agent.hash_id) {
                     Some(session) => format!(
@@ -1656,32 +1644,20 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                 Style::new().fg(status_color(agent)),
             ),
         ];
-        // What its worktree has changed so far, the way a diff stat reads.
-        if let Some((added, removed)) = state.diff_stat_of(&agent.hash_id) {
-            spans.push(Span::styled(
-                format!("+{added}"),
-                Style::new().fg(Color::Green),
-            ));
-            spans.push(Span::styled(",", Style::new().fg(Color::DarkGray)));
-            spans.push(Span::styled(
-                format!("-{removed}"),
-                Style::new().fg(Color::Red),
-            ));
-        }
         // Where its commands run: a pod by name, or the host when it asked for a pod and did
         // not get one — said on the row rather than left to be inferred.
         match (agent.env_id.as_deref(), agent.env_skipped.is_some()) {
-            (Some(_), _) => spans.push(Span::styled(
+            (Some(_), _) => more.push(Span::styled(
                 format!("  {}", agent.exec()),
                 Style::new().fg(Color::Blue),
             )),
-            (None, true) => spans.push(Span::styled(
+            (None, true) => more.push(Span::styled(
                 format!("  {}", agent.exec()),
                 Style::new().fg(Color::Yellow),
             )),
             (None, false) => {}
         }
-        ListItem::new(Line::from(spans))
+        ListItem::new(vec![Line::from(spans), Line::from(more)])
     }));
     // The list holds one non-selectable rule between the groups, so the
     // highlighted row is the selection's position after that shift.
