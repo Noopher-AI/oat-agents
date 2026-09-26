@@ -365,7 +365,10 @@ impl ExecProvider for KubernetesProvider {
         let object = report.as_object_mut().expect("object");
         match self.client() {
             Ok(client) => {
-                object.insert("cluster_reachable".into(), json!(true));
+                // Building a client only parses the kubeconfig and constructs a handle — no
+                // network request happens yet. `namespace_readable`, from the `list` call below,
+                // is the field that actually reflects the cluster answering.
+                object.insert("kubeconfig_valid".into(), json!(true));
                 let api = self.pods(&client);
                 let listed = {
                     let api = api.clone();
@@ -387,7 +390,7 @@ impl ExecProvider for KubernetesProvider {
                 object.insert("network_policies".into(), self.network_policies(&client));
             }
             Err(error) => {
-                object.insert("cluster_reachable".into(), json!(false));
+                object.insert("kubeconfig_valid".into(), json!(false));
                 object.insert("cluster_error".into(), json!(error.to_string()));
             }
         }

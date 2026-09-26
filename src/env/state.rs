@@ -253,7 +253,12 @@ impl EnvStore {
             .filter(|entry| entry.worktree == worktree)
             .filter(|entry| since_ms.is_none_or(|since| entry.started_ms >= since))
             .collect();
-        found.sort_by_key(|entry| entry.started_ms);
+        // `started_ms` alone is not enough to order two entries: it comes from wall-clock time
+        // at write time, and two writes landing in the same millisecond tie. Break the tie on
+        // `env_id` then `exec_id` so the order never depends on `fs::read_dir`'s enumeration.
+        found.sort_by(|a, b| {
+            a.started_ms.cmp(&b.started_ms).then_with(|| a.env_id.cmp(&b.env_id)).then_with(|| a.exec_id.cmp(&b.exec_id))
+        });
         found
     }
 
@@ -571,8 +576,14 @@ mod tests {
         let worker = record("oat-a-worker-1", "worker", &worktree, 1);
         let reviewer = record("oat-a-reviewer-1", "reviewer", &worktree, 2);
         let other = record("oat-a-worker-2", "worker", &elsewhere, 3);
+        // `started_ms` comes from wall-clock time, so two writes without a gap between them can
+        // land in the same millisecond; sleeping between them makes the chronological order the
+        // test asserts on an actual fact instead of a race against `ledgers_for_worktree`'s tie
+        // break (env_id, then exec_id).
         ran(&store, &worker, "e1", &["cargo", "test"], 0, 10, &tree);
+        std::thread::sleep(std::time::Duration::from_millis(5));
         ran(&store, &reviewer, "e2", &["cargo", "clippy"], 0, 20, &tree);
+        std::thread::sleep(std::time::Duration::from_millis(5));
         ran(&store, &other, "e3", &["cargo", "build"], 0, 30, &tree);
 
         let found = store.ledgers_for_worktree(&worktree, None);

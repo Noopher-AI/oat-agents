@@ -74,6 +74,20 @@ fn write_exec_profile(repo: &Path, home: &Path) {
     .unwrap();
 }
 
+fn write_exec_profile_with_kubeconfig(repo: &Path, home: &Path, kubeconfig: &Path) {
+    std::fs::create_dir_all(repo.join(".oat")).unwrap();
+    std::fs::write(repo.join(".oat/exec.toml"), "default_profile = \"local\"\n").unwrap();
+    std::fs::create_dir_all(home.join(".oat")).unwrap();
+    std::fs::write(
+        home.join(".oat/exec.toml"),
+        format!(
+            "[profile.local]\ncontext = \"test-context\"\nnamespace = \"test-namespace\"\nkubeconfig = {:?}\n",
+            kubeconfig
+        ),
+    )
+    .unwrap();
+}
+
 fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents::role::memory::InMemoryCatalog {
     InMemoryCatalogBuilder::new()
         .with_role(RoleDefinition {
@@ -199,20 +213,18 @@ fn exec_environment_false_never_gets_prior_verification_either() {
 
 #[test]
 fn env_doctor_reports_what_is_missing_on_a_machine_with_no_cluster() {
-    // No real kubeconfig can be reached from a test process: point KUBECONFIG at a path that
-    // does not exist, so the report is deterministic wherever this runs.
+    // No real kubeconfig can be reached from a test process: point the profile's own
+    // `kubeconfig` field at a path that does not exist, so the report is deterministic wherever
+    // this runs. Mutating the process-wide `KUBECONFIG` variable would race other tests running
+    // in parallel threads in this same binary.
     let directory = tempfile::tempdir().unwrap();
     let missing_kubeconfig = directory.path().join("no-such-kubeconfig");
-    let previous = std::env::var_os("KUBECONFIG");
-    unsafe {
-        std::env::set_var("KUBECONFIG", &missing_kubeconfig);
-    }
 
     let repo = directory.path().join("repo");
     let home = directory.path().join("home");
     std::fs::create_dir_all(&repo).unwrap();
     std::fs::create_dir_all(&home).unwrap();
-    write_exec_profile(&repo, &home);
+    write_exec_profile_with_kubeconfig(&repo, &home, &missing_kubeconfig);
     let environment = oat_agents::environment::TestEnvironment::new(home);
     let log = EventLog::for_dir(None);
 
@@ -225,13 +237,8 @@ fn env_doctor_reports_what_is_missing_on_a_machine_with_no_cluster() {
         }),
     );
 
-    match previous {
-        Some(value) => unsafe { std::env::set_var("KUBECONFIG", value) },
-        None => unsafe { std::env::remove_var("KUBECONFIG") },
-    }
-
     let report = result.expect("doctor reports rather than failing when the cluster is unreachable");
-    assert_eq!(report["cluster_reachable"], false);
+    assert_eq!(report["kubeconfig_valid"], false);
     assert!(report["cluster_error"].as_str().is_some_and(|s| !s.is_empty()), "{report}");
     assert_eq!(report["profile"], "local");
     assert!(report.get("tools").is_some(), "{report}");

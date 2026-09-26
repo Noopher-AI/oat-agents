@@ -20,6 +20,10 @@ pub struct MachineFacts {
 pub enum FileOutcome {
     Created,
     LeftAlone,
+    /// There was nothing to write to: no home directory was known for this environment, so the
+    /// machine file was neither found already correct nor written. Distinct from `LeftAlone`,
+    /// which means the file was inspected and already had this profile.
+    NoHomeDirectory,
 }
 
 pub struct ScaffoldReport {
@@ -35,7 +39,7 @@ pub fn scaffold(environment: &dyn Environment, repo: &Path, profile_name: &str, 
     let repo_file = scaffold_repo_file(&repo.join(config::REPO_CONFIG), profile_name)?;
     let machine_file = match environment.home_dir() {
         Some(home) => scaffold_machine_file(&home.join(config::MACHINE_CONFIG), profile_name, facts)?,
-        None => FileOutcome::LeftAlone,
+        None => FileOutcome::NoHomeDirectory,
     };
     Ok(ScaffoldReport { repo_file, machine_file })
 }
@@ -96,18 +100,18 @@ fn write(path: &Path, body: &str) -> Result<()> {
     std::fs::write(path, body).with_context(|| format!("failed to write {}", path.display()))
 }
 
+/// Appends `body` as a new `[profile.*]` table without ever truncating the file: there must be
+/// no window where the existing tables are gone from disk before the new one lands.
 fn append(path: &Path, body: &str) -> Result<()> {
     use std::io::Write;
-    let mut existing = std::fs::read_to_string(path).unwrap_or_default();
-    if !existing.is_empty() && !existing.ends_with('\n') {
-        existing.push('\n');
-    }
+    let existing = std::fs::read_to_string(path).unwrap_or_default();
     let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
+        .append(true)
         .open(path)
         .with_context(|| format!("failed to open {}", path.display()))?;
-    file.write_all(existing.as_bytes())?;
+    if !existing.is_empty() && !existing.ends_with('\n') {
+        file.write_all(b"\n")?;
+    }
     file.write_all(b"\n")?;
     file.write_all(body.as_bytes())?;
     Ok(())
