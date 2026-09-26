@@ -22,6 +22,10 @@ impl ChecklistStore {
         }
     }
 
+    pub fn for_dir(dir: Option<PathBuf>) -> Self {
+        Self { dir }
+    }
+
     fn path(&self, run_id: &str) -> Result<PathBuf> {
         let dir = self
             .dir

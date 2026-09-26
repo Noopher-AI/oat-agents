@@ -1,5 +1,6 @@
 pub mod checklist;
 pub mod commands;
+pub mod console;
 pub mod env;
 pub mod environment;
 pub mod error;
@@ -12,6 +13,7 @@ pub mod role;
 pub mod session;
 pub mod store;
 pub mod transcript;
+pub mod tui;
 pub mod usage;
 pub mod worktree;
 
@@ -71,6 +73,14 @@ pub enum TopCommand {
         #[command(subcommand)]
         command: env::commands::EnvSubcommand,
     },
+    /// A repository's `oat-console` (ADR-0005).
+    Console {
+        #[command(subcommand)]
+        command: commands::console::ConsoleCommand,
+    },
+    /// The live view: every Run, every agent's live terminal, its log and diff, and the
+    /// checklist.
+    Tui,
 }
 
 /// Exactly one of `--prompt` or `--input-file` is required across several commands; this
@@ -118,6 +128,8 @@ pub fn execute_with_exec(
             let log = event_log::EventLog::open(env);
             env::commands::execute(env, &log, command)
         }
+        TopCommand::Console { command } => commands::console::run(command, env, catalog),
+        TopCommand::Tui => commands::tui::run(env, catalog),
     }
 }
 

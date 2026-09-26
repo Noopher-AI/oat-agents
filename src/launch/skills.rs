@@ -1,11 +1,26 @@
 use crate::error::{codes, err, CliFailure};
-use crate::role::{Backend, SkillRef};
+use crate::launch::prompt;
+use crate::role::{Backend, SkillFile, SkillRef};
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// The core skill for reading the system (ADR-0004): the CLI supplies it, no plugin decides
+/// whether it exists, so every place that materializes an agent's skills adds it alongside
+/// whatever the catalog declares, rather than the catalog declaring it itself.
+pub fn oat_system_view_skill() -> SkillRef {
+    SkillRef {
+        name: "oat-system-view".to_string(),
+        files: vec![SkillFile {
+            relative_path: PathBuf::from("SKILL.md"),
+            contents: prompt::OAT_SYSTEM_VIEW_SKILL.as_bytes().to_vec(),
+            executable: false,
+        }],
+    }
+}
 
 /// The worktree-relative directory a backend reads project-level skills from (ADR-0003).
 /// Verified on this machine against an installed Codex (0.155.1): its own `--help`/`doctor`
@@ -173,5 +188,21 @@ pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]
     manifest.skills = declared;
     write_manifest(worktree, backend, &manifest)?;
     append_local_exclude(worktree, &format!("{root_rel}/.oat-manifest.json"))?;
+    Ok(())
+}
+
+/// Writes a role's skills under a plain directory that is not a git worktree — the console's
+/// own directory (ADR-0003's "keeps its skills in its own directory under `~/.oat/`"). There is
+/// no repository to conflict with and no local exclude file to update, so this skips both.
+pub fn materialize_skills_plain(dir: &Path, backend: Backend, skills: &[SkillRef]) -> Result<()> {
+    let root_rel = skill_root(backend);
+    let known_skills: BTreeSet<String> = skills.iter().map(|s| s.name.clone()).collect();
+    for skill in skills {
+        let skill_dir = dir.join(root_rel).join(&skill.name);
+        if skill_dir.exists() {
+            fs::remove_dir_all(&skill_dir).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
+        }
+        write_skill_files(&skill_dir, skill, backend, &known_skills)?;
+    }
     Ok(())
 }

@@ -29,7 +29,7 @@ pub struct LaunchSpec {
     pub repo: PathBuf,
 }
 
-fn launch_script(backend: Backend) -> String {
+pub(crate) fn launch_script(backend: Backend) -> String {
     match backend {
         Backend::Claude => concat!(
             "#!/bin/sh\n",
@@ -52,7 +52,7 @@ fn launch_script(backend: Backend) -> String {
     }
 }
 
-const PASS_THROUGH_VARS: &[&str] = &[
+pub(crate) const PASS_THROUGH_VARS: &[&str] = &[
     "OAT_AGENTS_LOG_DIR",
     "OAT_AGENTS_STATE_DIR",
     "OAT_AGENTS_CHECKLIST_DIR",

@@ -122,4 +122,53 @@ impl Tmux {
         let output = self.run(&args)?;
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
+
+    /// Types literal text into a session without attaching to it (the live view's live tab).
+    pub fn send_text(&self, session: &str, text: &str) -> Result<()> {
+        let mut args = self.base_args();
+        args.push("send-keys".to_string());
+        args.push("-t".to_string());
+        args.push(session.to_string());
+        args.push("-l".to_string());
+        args.push(text.to_string());
+        let output = self.run(&args)?;
+        if !output.status.success() {
+            return Err(err(
+                codes::INTERNAL_ERROR,
+                format!("tmux send-keys failed: {}", String::from_utf8_lossy(&output.stderr)),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Sends a named key (`Enter`, `Escape`, ...) rather than literal text.
+    pub fn send_key(&self, session: &str, key: &str) -> Result<()> {
+        let mut args = self.base_args();
+        args.push("send-keys".to_string());
+        args.push("-t".to_string());
+        args.push(session.to_string());
+        args.push(key.to_string());
+        let output = self.run(&args)?;
+        if !output.status.success() {
+            return Err(err(
+                codes::INTERNAL_ERROR,
+                format!("tmux send-keys failed: {}", String::from_utf8_lossy(&output.stderr)),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Resizes a session's window, so the live tab's pane matches the live view's pane size.
+    pub fn resize_window(&self, session: &str, cols: u16, rows: u16) -> Result<()> {
+        let mut args = self.base_args();
+        args.push("resize-window".to_string());
+        args.push("-t".to_string());
+        args.push(session.to_string());
+        args.push("-x".to_string());
+        args.push(cols.to_string());
+        args.push("-y".to_string());
+        args.push(rows.to_string());
+        let _ = self.run(&args)?;
+        Ok(())
+    }
 }

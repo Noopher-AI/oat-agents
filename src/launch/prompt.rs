@@ -3,8 +3,12 @@ use std::collections::BTreeSet;
 
 pub const PREAMBLE_CORE_ROLE: &str = include_str!("../../assets/core/preamble-core-role.md");
 pub const PREAMBLE_ROLE: &str = include_str!("../../assets/core/preamble-role.md");
+pub const PREAMBLE_CONSOLE: &str = include_str!("../../assets/core/preamble-console.md");
 pub const OAT_META_BASELINE: &str = include_str!("../../assets/core/oat-meta-baseline.md");
+pub const OAT_CONSOLE_BASELINE: &str = include_str!("../../assets/core/oat-console-baseline.md");
 pub const ROLE_PROTOCOL: &str = include_str!("../../assets/core/role-protocol.md");
+pub const OAT_SYSTEM_VIEW_SKILL: &str =
+    include_str!("../../assets/core/skills/oat-system-view/SKILL.md");
 pub const LAUNCH_PROTOCOL_CLAUDE: &str =
     include_str!("../../assets/core/launch-protocol-claude.md");
 pub const LAUNCH_PROTOCOL_CODEX: &str = include_str!("../../assets/core/launch-protocol-codex.md");

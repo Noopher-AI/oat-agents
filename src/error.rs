@@ -60,6 +60,7 @@ pub mod codes {
     pub const INVALID_LOCAL_SETTINGS: &str = "invalid_local_settings";
     pub const TRANSCRIPT_NOT_FOUND: &str = "transcript_not_found";
     pub const META_NOT_FOUND: &str = "meta_not_found";
+    pub const CONSOLE_NOT_FOUND: &str = "console_not_found";
     pub const INTERNAL_ERROR: &str = "internal_error";
     pub const ENV_PROFILE_UNRESOLVED: &str = "env_profile_unresolved";
     pub const ENV_STATE_UNAVAILABLE: &str = "env_state_unavailable";
