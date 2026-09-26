@@ -8,7 +8,9 @@ plugin, changing its shape is a breaking change for everyone using it.
 This guide's worked example lives in this repository at `tests/fixtures/sample-plugin/` (with a
 second, minimal plugin at `tests/fixtures/sample-plugin-secondary/` used only to show how two
 plugins combine). Every field below is used at least once there; when in doubt, read the
-fixture alongside this guide.
+fixture alongside this guide. For a real, working plugin rather than a fixture built to exercise
+every field, see `plugins/example/`: a planner, a worker, a reviewer and one skill, in the same
+format.
 
 ## Layout
 
