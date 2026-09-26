@@ -61,6 +61,14 @@ pub mod codes {
     pub const TRANSCRIPT_NOT_FOUND: &str = "transcript_not_found";
     pub const META_NOT_FOUND: &str = "meta_not_found";
     pub const INTERNAL_ERROR: &str = "internal_error";
+    pub const ENV_PROFILE_UNRESOLVED: &str = "env_profile_unresolved";
+    pub const ENV_STATE_UNAVAILABLE: &str = "env_state_unavailable";
+    pub const ENV_NOT_READY: &str = "env_not_ready";
+    pub const ENV_ROLE_MISMATCH: &str = "env_role_mismatch";
+    pub const ENV_OUTSIDE_WORKSPACE: &str = "env_outside_workspace";
+    pub const ENV_BACKEND_ERROR: &str = "env_backend_error";
+    pub const ENV_EXEC_TIMEOUT: &str = "env_exec_timeout";
+    pub const ENV_IMAGE_BUILD_FAILED: &str = "env_image_build_failed";
 }
 
 pub fn err(code: &str, message: impl Into<String>) -> anyhow::Error {

@@ -35,6 +35,12 @@ pub struct FireArgs {
     pub agent: String,
     #[arg(long)]
     pub trust_workspace: bool,
+    /// The execution profile this Run's roles should use. Defaults to the repository's
+    /// `default_profile`; `--no-exec` overrides either and gives the Run none at all.
+    #[arg(long, value_name = "NAME")]
+    pub exec_profile: Option<String>,
+    #[arg(long)]
+    pub no_exec: bool,
 }
 
 #[derive(Args, Debug)]
@@ -119,6 +125,25 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         event: events::RUN_CREATED.to_string(),
         details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "big_plan": big_plan})),
     })?;
+
+    // The Run's execution profile is chosen once, here, and every role launch inherits it
+    // (ticket Scope): `meta fire` selects it explicitly, from the repository's default, or not
+    // at all with `--no-exec`. Whether any given role actually gets an environment is still
+    // that role's own `exec_environment` field (ADR-0001's consequence: no role name is
+    // consulted here).
+    if !args.no_exec {
+        let exec_config = crate::env::config::load(env, Some(&repo))?;
+        match crate::env::config::resolve(&exec_config, args.exec_profile.as_deref()) {
+            Ok((profile_name, _)) => {
+                crate::env::state::EnvStore::open(env)?.save_run_profile(&run_id, &profile_name)?;
+            }
+            Err(error) if args.exec_profile.is_some() => return Err(error),
+            Err(_) => {
+                // No profile was requested and the repository has no default: the Run simply
+                // has none, which is not an error until a role that needs one is launched.
+            }
+        }
+    }
 
     let model = core_role
         .models

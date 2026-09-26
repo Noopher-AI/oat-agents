@@ -1,14 +1,16 @@
 use super::generate_id;
+use crate::env::integration::ExecEnvironments;
+use crate::env::state::EnvStore;
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::launch::{self, LaunchSpec};
-use crate::role::{Backend, RoleCatalog, StartLocation};
+use crate::role::{Backend, RoleCatalog, RoleDefinition, StartLocation};
 use crate::store::{RunRecord, Store};
 use crate::worktree;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 #[derive(Subcommand, Debug)]
@@ -33,13 +35,18 @@ pub struct FireArgs {
     pub input_file: Option<PathBuf>,
 }
 
-pub fn run(command: RoleCommand, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+pub fn run(
+    command: RoleCommand,
+    env: &dyn Environment,
+    catalog: &dyn RoleCatalog,
+    exec: &dyn ExecEnvironments,
+) -> Result<Value> {
     match command {
-        RoleCommand::Fire(args) => fire(args, env, catalog),
+        RoleCommand::Fire(args) => fire(args, env, catalog, exec),
     }
 }
 
-fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Result<Value> {
+fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog, exec: &dyn ExecEnvironments) -> Result<Value> {
     let run_id = env
         .var("OAT_RUN_ID")
         .ok_or_else(|| err(codes::RUN_NOT_BOUND, "role fire runs inside a Run; OAT_RUN_ID is not set"))?;
@@ -113,6 +120,18 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
     let model = role_def.models.get(&backend).cloned().unwrap_or_default();
 
     let log = crate::event_log::EventLog::open(env);
+    let mut skills = role_def.skills.clone();
+    let mut instructions = vec![role_def.instructions.clone()];
+    let env_binding = bring_up_environment(env, &log, &run_id, role_def, &args.role, &worktree_path, exec)?;
+    if let Some(record) = &env_binding {
+        skills.push(crate::env::exec_environment_skill());
+        instructions.push(render_execution_environment_block(record));
+        if role_def.prior_verification {
+            let reusable = exec.reusable(env, &worktree_path, record);
+            instructions.push(render_prior_verification_block(record, &reusable));
+        }
+    }
+
     let spec = LaunchSpec {
         run: run_record.clone(),
         role_label: args.role.clone(),
@@ -121,9 +140,9 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         branch: branch.clone(),
         backend,
         baseline: String::new(),
-        instructions: vec![role_def.instructions.clone()],
+        instructions,
         task,
-        skills: role_def.skills.clone(),
+        skills,
         model: model.clone(),
         role_names_for_preamble: catalog.role_names(),
         created_fresh_worktree: created_fresh,
@@ -139,6 +158,13 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         (model.model.clone(), model.reasoning_effort.clone()),
     )?;
 
+    if let Some(record) = &env_binding {
+        let mut dispatch_record = store.load_dispatch(&run_id, &dispatch.id)?;
+        dispatch_record.env_id = Some(record.env_id.clone());
+        dispatch_record.image_id = Some(record.image_id.clone());
+        store.save_dispatch(&dispatch_record)?;
+    }
+
     Ok(json!({
         "run_id": run_id,
         "dispatch_id": dispatch.id,
@@ -147,4 +173,44 @@ fn fire(args: FireArgs, env: &dyn Environment, catalog: &dyn RoleCatalog) -> Res
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
     }))
+}
+
+/// Whether this Dispatch gets an execution environment is two reads of the role definition
+/// (ticket Architecture): `exec_environment` decides it, and nothing else does — not the role's
+/// name, not what the Run happens to be doing. A role that says `false` never gets one, even
+/// when the Run carries a profile; a role that says `true` gets one only when the Run actually
+/// has a profile to give it.
+fn bring_up_environment(
+    env: &dyn Environment,
+    log: &crate::event_log::EventLog,
+    run_id: &str,
+    role_def: &RoleDefinition,
+    role: &str,
+    worktree: &Path,
+    exec: &dyn ExecEnvironments,
+) -> Result<Option<crate::env::EnvRecord>> {
+    if !role_def.exec_environment {
+        return Ok(None);
+    }
+    let Some(profile) = EnvStore::open(env)?.run_profile(run_id) else {
+        return Ok(None);
+    };
+    let record = exec.ensure(env, log, run_id, &profile, role, worktree)?;
+    Ok(Some(record))
+}
+
+fn render_execution_environment_block(record: &crate::env::EnvRecord) -> String {
+    format!(
+        "<execution-environment>\nenv_id: {}\nimage_id: {}\n</execution-environment>",
+        record.env_id, record.image_id
+    )
+}
+
+fn render_prior_verification_block(record: &crate::env::EnvRecord, reusable: &Value) -> String {
+    format!(
+        "## Prior verification\n\nThe execution ledger's reusable entries for this worktree, judged against \
+         environment `{}`:\n\n```json\n{}\n```",
+        record.env_id,
+        serde_json::to_string_pretty(reusable).unwrap_or_else(|_| "null".to_string())
+    )
 }
