@@ -39,6 +39,43 @@ struct Manifest {
     skills: BTreeSet<String>,
 }
 
+/// The skill directory as git sees it, relative to the worktree root. A repository may make
+/// the backend's directory a symlink — `.claude/skills -> ../.agents/skills` so both backends
+/// read the same skills — and then files written under `.claude/skills/` land, for git, under
+/// `.agents/skills/`. Conflict checks and exclude entries must name that path, or a tracked
+/// skill is overwritten unnoticed and the written skills show up as untracked files.
+fn repo_skill_root(worktree: &Path, backend: Backend) -> Result<String> {
+    let skill_root = skill_root(backend);
+    let root = worktree
+        .canonicalize()
+        .map_err(|e| err(codes::SKILL_WRITE_FAILED, format!("cannot resolve {}: {e}", worktree.display())))?;
+    let mut existing = worktree.join(skill_root);
+    let mut missing = Vec::new();
+    while fs::symlink_metadata(&existing).is_err() {
+        let Some(name) = existing.file_name() else { break };
+        missing.push(name.to_owned());
+        existing.pop();
+    }
+    let mut resolved = existing.canonicalize().map_err(|e| {
+        err(codes::SKILL_WRITE_FAILED, format!("cannot resolve {}: {e}", existing.display()))
+    })?;
+    resolved.extend(missing.iter().rev());
+    let relative = resolved.strip_prefix(&root).map_err(|_| {
+        err(
+            codes::SKILL_WRITE_FAILED,
+            format!(
+                "'{skill_root}' resolves to '{}', outside the worktree; skills are written only into it (ADR-0003)",
+                resolved.display()
+            ),
+        )
+    })?;
+    Ok(relative
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/"))
+}
+
 fn manifest_path(worktree: &Path, backend: Backend) -> PathBuf {
     worktree.join(skill_root(backend)).join(".oat-manifest.json")
 }
@@ -143,8 +180,9 @@ fn write_skill_files(dir: &Path, skill: &SkillRef, backend: Backend, known_skill
 /// before a launch proceeds (ticket §6.2 rule 3).
 pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]) -> Result<()> {
     let root_rel = skill_root(backend);
+    let repo_rel = repo_skill_root(worktree, backend)?;
     for skill in skills {
-        let relative_dir = format!("{root_rel}/{}", skill.name);
+        let relative_dir = format!("{repo_rel}/{}", skill.name);
         let tracked = tracked_files_under(worktree, &relative_dir)?;
         if !tracked.is_empty() {
             return Err(Error::new(
@@ -182,12 +220,12 @@ pub fn materialize_skills(worktree: &Path, backend: Backend, skills: &[SkillRef]
             fs::remove_dir_all(&dir).map_err(|e| err(codes::SKILL_WRITE_FAILED, e.to_string()))?;
         }
         write_skill_files(&dir, skill, backend, &declared)?;
-        append_local_exclude(worktree, &format!("{root_rel}/{}/", skill.name))?;
+        append_local_exclude(worktree, &format!("{repo_rel}/{}/", skill.name))?;
     }
 
     manifest.skills = declared;
     write_manifest(worktree, backend, &manifest)?;
-    append_local_exclude(worktree, &format!("{root_rel}/.oat-manifest.json"))?;
+    append_local_exclude(worktree, &format!("{repo_rel}/.oat-manifest.json"))?;
     Ok(())
 }
 

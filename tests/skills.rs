@@ -142,3 +142,46 @@ fn codex_skills_land_under_agents_skills() {
     assert!(path.join(".agents/skills/alpha/SKILL.md").exists());
     assert!(!path.join(".claude").exists());
 }
+
+/// A repository whose `.claude/skills` is a symlink to its tracked `.agents/skills`, so both
+/// backends read one set of skills.
+#[cfg(unix)]
+fn repo_with_shared_skill_dir() -> TempRepo {
+    let repo = TempRepo::new();
+    let path = repo.path();
+    std::fs::create_dir_all(path.join(".agents/skills/tdd")).unwrap();
+    std::fs::write(path.join(".agents/skills/tdd/SKILL.md"), "# The repository's own").unwrap();
+    std::fs::create_dir_all(path.join(".claude")).unwrap();
+    std::os::unix::fs::symlink("../.agents/skills", path.join(".claude/skills")).unwrap();
+    let git = |args: &[&str]| assert!(Command::new("git").current_dir(&path).args(args).status().unwrap().success());
+    git(&["add", "-A"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "shared skills"]);
+    repo
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_written_through_a_symlinked_skill_dir_leave_git_status_clean() {
+    let repo = repo_with_shared_skill_dir();
+    let path = repo.path();
+    materialize_skills(&path, Backend::Claude, &[skill("alpha", vec![file("SKILL.md", "# Alpha", false)])]).unwrap();
+
+    assert!(path.join(".agents/skills/alpha/SKILL.md").exists(), "written through the symlink");
+    let status = Command::new("git").current_dir(&path).args(["status", "--porcelain"]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&status.stdout), "", "nothing the launch wrote is visible to git");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tracked_skill_behind_a_symlinked_skill_dir_still_refuses_the_launch() {
+    let repo = repo_with_shared_skill_dir();
+    let path = repo.path();
+    let error = materialize_skills(&path, Backend::Claude, &[skill("tdd", vec![file("SKILL.md", "plugin", false)])])
+        .unwrap_err();
+    assert_eq!(to_failure(&error).code, codes::SKILL_CONFLICT);
+    assert_eq!(
+        std::fs::read_to_string(path.join(".agents/skills/tdd/SKILL.md")).unwrap(),
+        "# The repository's own",
+        "the repository's skill is untouched"
+    );
+}
