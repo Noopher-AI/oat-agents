@@ -20,8 +20,14 @@ struct ManifestEntry {
 
 /// Copies every resolved plugin's tree into `dest_root`, one subdirectory per plugin in pin
 /// order, and writes a manifest recording that order — `catalog_from_snapshot` reads it back so
-/// role/core-role joining sees the same order the pins declared.
+/// role/core-role joining sees the same order the pins declared. `dest_root` is replaced, not
+/// merged into: reopening a console (or any other caller) that already has a snapshot at this
+/// path gets a snapshot that exactly matches the current pins, so content removed upstream since
+/// the last snapshot does not linger and get loaded again.
 pub fn snapshot_plugins(resolved: &[ResolvedPlugin], dest_root: &Path) -> Result<Vec<PluginRecord>> {
+    if dest_root.exists() {
+        fs::remove_dir_all(dest_root)?;
+    }
     fs::create_dir_all(dest_root)?;
     let mut manifest = Vec::new();
     let mut records = Vec::new();
@@ -116,5 +122,65 @@ mod tests {
         let catalog = catalog_from_snapshot(&dest).unwrap();
         use crate::role::RoleCatalog;
         assert!(catalog.role_names().contains(&"sample-role-fresh".to_string()));
+    }
+
+    fn minimal_plugin_source(dir: &Path, name: &str, role_name: &str) {
+        fs::create_dir_all(dir).unwrap();
+        fs::write(
+            dir.join("oat-plugin.toml"),
+            format!("format_version = 1\nname = \"{name}\"\ndescription = \"d\"\n"),
+        )
+        .unwrap();
+        let role_dir = dir.join("roles").join(role_name);
+        fs::create_dir_all(&role_dir).unwrap();
+        fs::write(
+            role_dir.join("role.toml"),
+            "description = \"d\"\nstart = \"fresh\"\nexec_environment = false\nprior_verification = false\n",
+        )
+        .unwrap();
+        fs::write(role_dir.join("instructions.md"), format!("# {role_name}\n")).unwrap();
+
+        let core_dir = dir.join("core");
+        fs::create_dir_all(&core_dir).unwrap();
+        fs::write(core_dir.join("oat-meta-instruction.md"), "# oat-meta\n").unwrap();
+        fs::write(core_dir.join("oat-console-instruction.md"), "# oat-console\n").unwrap();
+    }
+
+    #[test]
+    fn reopening_a_console_replaces_the_snapshot_instead_of_merging_into_it() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        minimal_plugin_source(&source, "reopen-plugin", "role-a");
+
+        let resolved = vec![ResolvedPlugin {
+            declared_name: "reopen-plugin".to_string(),
+            dir: source.clone(),
+            trust_key: TrustKey::Path { content_hash: "sha256:aa".to_string() },
+        }];
+
+        let dest = temp.path().join("console").join("plugins");
+        snapshot_plugins(&resolved, &dest).unwrap();
+
+        use crate::role::RoleCatalog;
+        let first_catalog = catalog_from_snapshot(&dest).unwrap();
+        assert!(first_catalog.role_names().contains(&"role-a".to_string()));
+
+        // The upstream source drops role-a and gains role-b, then the console is reopened:
+        // the same console directory is snapshotted into again.
+        fs::remove_dir_all(source.join("roles").join("role-a")).unwrap();
+        let role_b_dir = source.join("roles").join("role-b");
+        fs::create_dir_all(&role_b_dir).unwrap();
+        fs::write(
+            role_b_dir.join("role.toml"),
+            "description = \"d\"\nstart = \"fresh\"\nexec_environment = false\nprior_verification = false\n",
+        )
+        .unwrap();
+        fs::write(role_b_dir.join("instructions.md"), "# role-b\n").unwrap();
+
+        snapshot_plugins(&resolved, &dest).unwrap();
+        let second_catalog = catalog_from_snapshot(&dest).unwrap();
+        let names = second_catalog.role_names();
+        assert!(names.contains(&"role-b".to_string()), "expected role-b in {names:?}");
+        assert!(!names.contains(&"role-a".to_string()), "role-a should no longer be loadable, got {names:?}");
     }
 }

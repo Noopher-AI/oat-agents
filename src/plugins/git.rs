@@ -27,9 +27,11 @@ pub fn cache_dir(home: &Path, url: &str, commit: &str) -> PathBuf {
 
 /// Ensures `~/.oat/plugins/<source hash>/<commit>/` holds a working tree checked out exactly at
 /// `commit`, fetching it with `git` if it is not already cached, and re-verifying the checkout
-/// against `commit` either way. Never leaves a partially-fetched directory behind on failure:
-/// a fresh fetch happens in the same directory it will be re-verified from, and a verification
-/// failure is reported by name rather than silently retried.
+/// against `commit` either way. Never leaves a partially-fetched directory behind on failure: a
+/// fresh fetch happens in a temporary directory beside the cache path and is only renamed into
+/// place once `verify_commit` confirms it. So a failed attempt (network, credentials, missing
+/// commit) leaves nothing at the cache path, and the next call starts a real fetch again instead
+/// of reporting a false cache mismatch.
 pub fn ensure_commit(home: &Path, url: &str, commit: &str) -> Result<PathBuf> {
     let dir = cache_dir(home, url, commit);
     if dir.is_dir() {
@@ -46,21 +48,48 @@ pub fn ensure_commit(home: &Path, url: &str, commit: &str) -> Result<PathBuf> {
         ));
     }
 
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("could not create '{}': {e}", dir.display())))?;
+    let parent = dir.parent().ok_or_else(|| {
+        err(codes::PLUGIN_FETCH_FAILED, format!("invalid cache path '{}'", dir.display()))
+    })?;
+    std::fs::create_dir_all(parent)
+        .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("could not create '{}': {e}", parent.display())))?;
 
-    run(&dir, &["init", "--quiet"])?;
-    run(&dir, &["fetch", "--quiet", "--depth", "1", url, commit])
+    let tmp_dir = parent.join(format!(".tmp-{commit}-{}", std::process::id()));
+    if tmp_dir.exists() {
+        std::fs::remove_dir_all(&tmp_dir)
+            .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("could not clear '{}': {e}", tmp_dir.display())))?;
+    }
+    std::fs::create_dir_all(&tmp_dir)
+        .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("could not create '{}': {e}", tmp_dir.display())))?;
+
+    if let Err(e) = fetch_into(&tmp_dir, url, commit) {
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        return Err(e);
+    }
+
+    std::fs::rename(&tmp_dir, &dir).map_err(|e| {
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        err(codes::PLUGIN_FETCH_FAILED, format!("could not finalize '{}': {e}", dir.display()))
+    })?;
+    Ok(dir)
+}
+
+/// Fetches `commit` from `url` into `tmp_dir` and verifies it landed exactly there. Runs
+/// entirely inside `tmp_dir`, so a failure at any step (init, fetch, checkout, verify) leaves no
+/// trace at the real cache path; only a fully verified fetch is ever promoted there.
+fn fetch_into(tmp_dir: &Path, url: &str, commit: &str) -> Result<()> {
+    run(tmp_dir, &["init", "--quiet"])?;
+    run(tmp_dir, &["fetch", "--quiet", "--depth", "1", url, commit])
         .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("fetching '{url}' at commit '{commit}' failed: {e}")))?;
-    run(&dir, &["checkout", "--quiet", "FETCH_HEAD"])?;
+    run(tmp_dir, &["checkout", "--quiet", "FETCH_HEAD"])?;
 
-    if !verify_commit(&dir, commit)? {
+    if !verify_commit(tmp_dir, commit)? {
         return Err(err(
             codes::PLUGIN_FETCH_FAILED,
             format!("the tree fetched from '{url}' does not match the pinned commit '{commit}'"),
         ));
     }
-    Ok(dir)
+    Ok(())
 }
 
 fn verify_commit(dir: &Path, commit: &str) -> Result<bool> {
@@ -139,5 +168,43 @@ mod tests {
         let bogus_commit = "0".repeat(40);
         let error = ensure_commit(&home, &source.to_string_lossy(), &bogus_commit).unwrap_err();
         assert!(error.to_string().contains(&source.to_string_lossy().to_string()) || error.to_string().contains("fetch"));
+    }
+
+    #[test]
+    fn a_failed_fetch_leaves_nothing_cached_so_the_next_attempt_fetches_again() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        init_source_repo(&source);
+        let home = temp.path().join("home");
+        fs::create_dir_all(&home).unwrap();
+
+        let bogus_commit = "1".repeat(40);
+        let dir = cache_dir(&home, &source.to_string_lossy(), &bogus_commit);
+
+        let first = ensure_commit(&home, &source.to_string_lossy(), &bogus_commit).unwrap_err();
+        assert!(
+            first.to_string().contains("fetching") || first.to_string().contains("fetch"),
+            "expected a real fetch-failure message, got: {first}"
+        );
+        assert!(
+            !dir.exists(),
+            "a failed ensure_commit must not leave a directory behind at '{}'",
+            dir.display()
+        );
+
+        // The second attempt must try a real fetch again, not report a false cache mismatch:
+        // the message and error kind must match the first attempt's, not the "no longer
+        // matches that commit" text a stale, half-fetched directory would otherwise trigger.
+        let second = ensure_commit(&home, &source.to_string_lossy(), &bogus_commit).unwrap_err();
+        assert!(
+            !second.to_string().contains("no longer matches that commit"),
+            "second attempt falsely reported a cache mismatch instead of retrying the fetch: {second}"
+        );
+        assert_eq!(
+            first.to_string(),
+            second.to_string(),
+            "both attempts should fail identically since neither ever fetches successfully"
+        );
+        assert!(!dir.exists(), "the second failed attempt must not leave a directory behind either");
     }
 }
