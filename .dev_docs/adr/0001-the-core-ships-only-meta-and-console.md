@@ -1,4 +1,4 @@
-# ADR-0002 — The core ships only `oat-meta` and `oat-console`; every other role comes from a plugin
+# ADR-0001 — The core ships only `oat-meta` and `oat-console`; every other role comes from a plugin
 
 *Status: in force.*
 

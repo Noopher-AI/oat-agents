@@ -21,7 +21,7 @@ public, even after it is deleted.
 
 - The core owns the mechanism: launching, worktrees, sessions, the Run inbox, the workflow
   log, execution environments, the live view, and the two core roles `oat-meta` and
-  `oat-console` (ADR-0001, ADR-0002).
+  `oat-console` (ADR-0001).
 - Everything that expresses *how a team works* — role instructions, working conventions,
   skills, model choices — belongs in a plugin. If a change to the core would encode one
   team's practice, it belongs in a plugin instead, and the core may need a hook for it.
@@ -39,7 +39,7 @@ public, even after it is deleted.
 ## Decision records
 
 - Never delete or rewrite a record that has reached `main`; follow `.dev_docs/adr/README.md`.
-- Cite a record by number (`ADR-0002`), never by filename. CI checks every citation resolves
+- Cite a record by number (`ADR-0001`), never by filename. CI checks every citation resolves
   and every record is listed in the index.
 
 ## Verification

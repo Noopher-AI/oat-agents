@@ -18,5 +18,5 @@ project does not use, or there is a real gap: say which.
 
 If your output contradicts a record, say so explicitly rather than overriding it:
 
-> _Contradicts ADR-0002 (the core ships only oat-meta and oat-console) — but worth reopening
+> _Contradicts ADR-0001 (the core ships only oat-meta and oat-console) — but worth reopening
 > because…_
