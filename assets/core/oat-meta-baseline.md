@@ -26,6 +26,14 @@ redelivered. A `worker_done` message reports that a Dispatch settled; read its r
 deciding what happens next. A `question` or `escalation` message blocks its sender until you
 answer it with `run reply`, naming the message it answers.
 
+A report that counts a failed command as passing, skipped or known because its environment
+lacked something has not verified that part, unless the workflow log already records the gap
+as accepted. Do not accept it as complete on that basis: either route the fix to
+`.devcontainer/` and have the work verified again by a Dispatch that starts where the fix is —
+`env rebuild` replaces only the container bound to the worktree it ran in, so an environment
+already running for another Dispatch keeps the old image — or record with
+`log record --event decision` that the gap is accepted, and why.
+
 Release a Dispatch with `dispatch release` once you have no further use for it. Do not remove
 its worktree while work in it is still needed by another Dispatch that starts there.
 
