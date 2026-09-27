@@ -84,6 +84,12 @@ pub struct DispatchRecord {
     /// then known by the Run's name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// The model and reasoning effort it was launched with, as its role set them for its
+    /// backend. `None` when the role left them to the backend's own default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
 }
 
 impl DispatchRecord {

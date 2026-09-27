@@ -171,11 +171,11 @@ pub fn launch_dispatch(
             dispatch_dir.to_string_lossy().to_string(),
         ),
     ];
-    if let Some(m) = model {
-        env_vars.push(("OAT_MODEL".to_string(), m));
+    if let Some(m) = &model {
+        env_vars.push(("OAT_MODEL".to_string(), m.clone()));
     }
-    if let Some(e) = effort {
-        env_vars.push(("OAT_EFFORT".to_string(), e));
+    if let Some(e) = &effort {
+        env_vars.push(("OAT_EFFORT".to_string(), e.clone()));
     }
     for name in PASS_THROUGH_VARS {
         if let Some(v) = env.var(name) {
@@ -205,6 +205,8 @@ pub fn launch_dispatch(
         report: None,
         released_at: None,
         name: spec.name.clone(),
+        model,
+        effort,
     };
     debug_assert_eq!(dispatch.hash_id(&spec.run), hid);
     store.create_dispatch(&dispatch)?;

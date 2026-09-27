@@ -85,6 +85,9 @@ pub struct AgentRow {
     /// Why a role that asked for an execution environment ran on the host instead
     /// (`.dev_docs/CONTEXT.md`, *Execution environment*: reported, never left to be inferred).
     pub env_skipped: Option<String>,
+    /// The model and effort it was launched with, when its role named them.
+    pub model: Option<String>,
+    pub effort: Option<String>,
 }
 
 impl AgentRow {
@@ -109,6 +112,23 @@ impl AgentRow {
     /// The coordinator, the one Dispatch that asks a person anything.
     pub fn is_meta(&self) -> bool {
         matches!(self.role.as_deref(), Some(role) if role == CoreRole::Meta.name() || role == "meta")
+    }
+
+    /// What it was launched to run as — `gpt-5.5 high` — or, when its role left the model to
+    /// the backend, the backend's name. The roster falls back to this where no transcript
+    /// says what the session actually runs on: a Codex session keeps none this crate reads.
+    pub fn launched_as(&self) -> String {
+        match (self.model.as_deref(), self.effort.as_deref()) {
+            (Some(model), Some(effort)) => format!("{model} {effort}"),
+            (Some(model), None) => model.to_owned(),
+            (None, effort) => {
+                let backend = self.agent.clone().unwrap_or_default();
+                match effort {
+                    Some(effort) if !backend.is_empty() => format!("{backend} {effort}"),
+                    _ => backend,
+                }
+            }
+        }
     }
 
     /// `pod:<env>`, `HOST (no pod)` for a role that asked for a pod and did not get one, or
@@ -315,6 +335,8 @@ pub fn agent_rows(run: &RunRecord, dispatches: &[DispatchRecord], events: &[Valu
                 env_id: dispatch.env_id.clone(),
                 image_id: dispatch.image_id.clone(),
                 env_skipped: dispatch.env_skipped.clone(),
+                model: dispatch.model.clone(),
+                effort: dispatch.effort.clone(),
             }
         })
         .collect()

@@ -1557,7 +1557,8 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                     state
                         .spend_of(&agent.hash_id)
                         .map(model_and_effort)
-                        .unwrap_or_default()
+                        .filter(|model| !model.is_empty())
+                        .unwrap_or_else(|| agent.launched_as())
                 ),
                 Style::new().fg(Color::White),
             ),

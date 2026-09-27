@@ -189,6 +189,8 @@ fn fixture() -> Fixture {
         report: None,
         released_at: None,
         name: None,
+        model: None,
+        effort: None,
     };
     store.create_dispatch(&meta).unwrap();
     store
@@ -210,8 +212,11 @@ fn fixture() -> Fixture {
             worktree: "/repos/pottery.oat-glaze-reviewer".to_string(),
             branch: "oat/glaze/reviewer".to_string(),
             created_at: "2026-09-26T01:02:00.000000000Z".to_string(),
+            backend: "codex".to_string(),
             env_skipped: Some("this Run has no execution profile".to_string()),
             settled: Some(crate::store::Settlement::Succeeded),
+            model: Some("gpt-5.5".to_string()),
+            effort: Some("high".to_string()),
             ..meta.clone()
         })
         .unwrap();
@@ -222,7 +227,7 @@ fn fixture() -> Fixture {
         entry(OPEN_RUN, None, None, events::EXEC_PROFILE_SELECTED, serde_json::json!({"profile": "gb10"})),
         entry(OPEN_RUN, Some("dispatch-0"), Some("oat-meta"), events::AGENT_ENTER, serde_json::json!({"backend": "claude"})),
         entry(OPEN_RUN, Some("dispatch-1"), Some("worker"), events::AGENT_ENTER, serde_json::json!({"backend": "claude"})),
-        entry(OPEN_RUN, Some("dispatch-2"), Some("reviewer"), events::AGENT_ENTER, serde_json::json!({"backend": "claude"})),
+        entry(OPEN_RUN, Some("dispatch-2"), Some("reviewer"), events::AGENT_ENTER, serde_json::json!({"backend": "codex"})),
         entry(OPEN_RUN, Some("dispatch-2"), Some("reviewer"), events::AGENT_EXIT, serde_json::json!({"outcome": "succeeded"})),
         entry(OPEN_RUN, None, None, events::NEEDS_HUMAN, serde_json::json!({"message": "which glaze?"})),
         entry(CLOSED_RUN, None, None, events::EXEC_PROFILE_NONE, serde_json::json!({"profile": null})),
@@ -394,6 +399,10 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
     }
     assert!(text.contains("pod:oat-env-worker"), "{text}");
     assert!(text.contains("HOST (no pod)"), "{text}");
+    assert!(
+        text.contains("gpt-5.5 high"),
+        "a Codex reviewer, with no transcript to read, shows the model it was launched on:\n{text}"
+    );
     assert!(text.contains("succeeded at"), "a finished agent says how it ended:\n{text}");
     assert!(text.contains("finished"), "the rule separates live from finished:\n{text}");
     assert!(text.contains(WAITING_MARK), "the coordinator that asked is marked:\n{text}");
@@ -638,6 +647,8 @@ fn a_linked_checklist_item_shows_its_work_and_flags_work_finished_but_unchecked(
         report: None,
         released_at: released.then(now_iso),
         name: Some(name.to_string()),
+        model: None,
+        effort: None,
     };
     fx.store
         .create_dispatch(&dispatch("dispatch-g", "glaze", Some(crate::store::Settlement::Succeeded), true))

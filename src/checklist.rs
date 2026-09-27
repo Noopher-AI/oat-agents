@@ -278,6 +278,8 @@ mod tests {
             report: None,
             released_at: released.then(|| "2026-09-26T02:00:00Z".to_string()),
             name: name.map(str::to_string),
+            model: None,
+            effort: None,
         }
     }
 
