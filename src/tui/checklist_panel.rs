@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The checklist overlay: a read-only floating panel showing the open Run's
 //! checklist, opened with Ctrl+L the way Ctrl+\\ opens the console.
 //!

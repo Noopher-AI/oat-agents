@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 oat-agents contributors
+
 """Draws docs/assets/tui-demo.svg: an animated replay of `oat-agents tui` for the README.
 
 The layout, glyphs and colours follow src/tui (the header, the two-line roster, the tabs,

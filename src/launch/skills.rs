@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use crate::error::{codes, err, CliFailure};
 use crate::launch::prompt;
 use crate::role::{Backend, SkillFile, SkillRef};

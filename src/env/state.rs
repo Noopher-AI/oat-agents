@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The environment registry and the execution ledger.
 //!
 //! The registry is how a command run anywhere inside a worktree finds the environment bound to

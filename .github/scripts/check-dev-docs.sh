@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 oat-agents contributors
+#
 # Checks the invariants of .dev_docs that nothing else guards:
 # every ADR-NNNN citation resolves to a record, and every record is listed in
 # the index in .dev_docs/adr/README.md.

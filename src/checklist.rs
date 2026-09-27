@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use crate::concurrency::{Queue, QueuedFire};
 use crate::environment::Environment;
 use crate::error::{codes, err};
@@ -316,10 +319,10 @@ mod tests {
             queued_at: String::new(),
             claimed_by: None,
         };
-        let waiting = ItemProgress::of("kiln", &[ended.clone()], std::slice::from_ref(&queued));
+        let waiting = ItemProgress::of("kiln", std::slice::from_ref(&ended), std::slice::from_ref(&queued));
         assert_eq!(waiting.summary(), "kiln-review queued");
 
-        let finished = ItemProgress::of("kiln", &[ended.clone()], &[]);
+        let finished = ItemProgress::of("kiln", std::slice::from_ref(&ended), &[]);
         assert_eq!(finished.summary(), "worker kiln succeeded, released");
         assert!(finished.looks_done());
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The embedded source (ticket Architecture): the example plugin's tree, embedded at build
 //! time by `build.rs` from `plugins/example/` in this repository. Its content hash is checked
 //! by a test to equal the hash of that directory, so the embedded copy and the directory can

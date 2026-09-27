@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 oat-agents contributors
+
 """Draws docs/assets/quickstart.svg: the getting-started commands typed out, one caption per step.
 
     python3 docs/assets/make-quickstart.py

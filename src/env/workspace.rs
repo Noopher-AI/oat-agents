@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Getting the worktree into the environment.
 //!
 //! This file is the only place that knows what a hostPath is. A cluster on another machine

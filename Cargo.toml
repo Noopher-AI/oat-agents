@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
+description = "Run a supervised team of coding agents on one machine, on git worktrees and tmux"
+repository = "https://github.com/Noopher-AI/oat-agents"
+readme = "README.md"
+keywords = ["agents", "claude", "codex", "tmux", "worktree"]
+categories = ["command-line-utilities", "development-tools"]
 
 [[bin]]
 name = "oat-agents"

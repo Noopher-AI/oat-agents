@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Reads a Dispatch's own transcript, for `dispatch read` and for the liveness report a timed
 //! out `run wait` carries.
 //!

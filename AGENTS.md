@@ -49,4 +49,5 @@ cargo build --locked --all-targets
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 .github/scripts/check-dev-docs.sh
+.github/scripts/check-license-headers.sh
 ```

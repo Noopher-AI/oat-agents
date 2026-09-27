@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The snapshot (ticket Architecture): once plugins are resolved and trusted, their trees are
 //! copied into the Run's (or console's) own state directory, and every later catalog is built
 //! from that copy rather than by re-resolving pins.

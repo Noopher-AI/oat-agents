@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The plugin format's on-disk shape (ADR-0002): the TOML types every plugin file
 //! deserializes into, and the directory walk `load` uses to find them. Nothing here validates
 //! the *content* of a plugin — only how its files parse. `load` turns a parsed value into a

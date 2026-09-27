@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The live view's reading of a Run: its Dispatches from the Store and its history from the
 //! workflow log, folded into the rows every screen draws — one per Run in the picker, one per
 //! Dispatch in the roster, one per log entry in the timeline. Only files an observer may

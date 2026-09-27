@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The live view's only way to touch the machine: type into a session, capture its screen,
 //! resize it, check whether it is alive, diff a worktree against its base, close or clean a
 //! Run, and open or stop a repository's console. Rendering and key handling never call tmux

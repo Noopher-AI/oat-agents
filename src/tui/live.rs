@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Typing at an agent from its live screen.
 //!
 //! The live tab is the agent's terminal: every key pressed there is handed

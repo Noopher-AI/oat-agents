@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The content hash an in-repository plugin pins to, and the embedded example checks itself
 //! against (ticket Architecture): SHA-256 over the sorted list of (relative path, file mode,
 //! file bytes) of every file under a directory, so a rename, a mode change or an edit all

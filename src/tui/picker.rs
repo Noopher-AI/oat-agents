@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The Run picker: every Run the log knows about, and the keys that open
 //! or close one.
 

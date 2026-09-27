@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Text the screens share: how a transcript is laid out, how Markdown reads,
 //! how lines wrap, and the small glyph and colour tables every pane uses.
 

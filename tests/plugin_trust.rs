@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! F5's gate end to end: `meta fire`/`console open` against `.oat/plugins.toml`, `plugin
 //! trust`/`plugin list`, and what `run.json`/the workflow log record about it (issue's own
 //! acceptance criteria).

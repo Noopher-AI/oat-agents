@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 // Embeds `plugins/example/` into the binary (ticket Architecture: "the example plugin's tree
 // is embedded at build time"). `plugins/example/` is F6's to write; until it lands this simply
 // embeds nothing, which keeps the crate building and keeps the embedded-vs-repository hash

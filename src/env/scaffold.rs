@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Profile scaffolding: the function `init` (F5) calls to give a fresh repository a working
 //! execution profile, without ever overwriting a file or a profile that is already there
 //! (ticket Contracts).

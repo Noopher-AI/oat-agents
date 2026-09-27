@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   dev-docs:
@@ -10,6 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: .github/scripts/check-dev-docs.sh
+      - run: .github/scripts/check-license-headers.sh
 
   rust:
     runs-on: ubuntu-latest

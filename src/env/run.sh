@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 oat-agents contributors
+#
 # In-pod runner for oat-agents.
 #
 #   run.sh start <exec-id> <cwd> <command...>

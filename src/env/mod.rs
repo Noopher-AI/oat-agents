@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Execution environments: containers a Dispatch's build and test commands run in instead of
 //! the host (`.dev_docs/CONTEXT.md`, *Execution environment*).
 //!

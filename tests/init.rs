@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! `oat-agents init [--local]` (issue's own acceptance criteria): never overwrites an existing
 //! configuration without saying so, `init --local` leaves `git status` clean, and plain `init`
 //! writes `.oat/plugins.toml`.

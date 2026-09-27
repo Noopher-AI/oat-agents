@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! An ordered list of validated plugins in, a `RoleCatalog` out — or the conflicts between
 //! them (ticket Architecture). This is the only part of `plugin` that knows more than one
 //! plugin exists.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The trust store (ticket Architecture): `~/.oat/trust.toml`, one entry per (source, version),
 //! machine-only. Nothing under a repository is ever read as trust, and a changed pin voids
 //! trust simply because the version half of the key changes with it. A git pin that follows

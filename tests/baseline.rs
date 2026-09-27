@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use oat_agents::launch::prompt::{OAT_META_BASELINE, ROLE_PROTOCOL};
 
 /// Plugin role names ADR-0001 assigns to the example plugin, never the core's — a hit here

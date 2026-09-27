@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! `oat-console` (ADR-0005): one per initialised repository, launched in its own directory
 //! outside the repository and outside any Run, and outliving any single launch of it.
 

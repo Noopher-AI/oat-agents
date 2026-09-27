@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with oat-agents
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Everything in this issue is public. Remove credentials, machine names, cluster contexts
+        and private repository paths from any output you paste.
+  - type: input
+    id: version
+    attributes:
+      label: oat-agents version
+      description: Output of `oat-agents --version`, plus the commit if you built from source
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS, tmux and git versions
+      placeholder: "e.g. Ubuntu 24.04, tmux 3.4, git 2.43"
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      options:
+        - Claude Code
+        - Codex
+        - Both
+        - Not relevant
+    validations:
+      required: true
+  - type: input
+    id: plugin
+    attributes:
+      label: Plugin
+      description: The plugin in use, e.g. the embedded `example`, or a git plugin
+  - type: textarea
+    id: command
+    attributes:
+      label: Command run
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the error output, and relevant lines of `oat-agents log` if a Run was involved.
+    validations:
+      required: true

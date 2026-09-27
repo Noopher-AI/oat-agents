@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Execution profiles.
 //!
 //! Nothing in this crate is allowed to assume the cluster is the local one. Every fact that
