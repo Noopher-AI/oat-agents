@@ -47,6 +47,16 @@ Then say so in your report: the image id you finished on, that it differs from t
 
 If the task does not own `.devcontainer/`, report the missing capability as a blocker with the exact command and error. Do not install it inside the container to get past it.
 
+## When a command fails because the environment lacks something
+
+A command that fails because the image has no binary, browser, library or service it needs verified nothing. It is not a pass, not a skip and not "known": the part of the work it covers is unproven, and a report that reads green because of it misstates the Run to everyone who acts on it.
+
+Call a failure known, pre-existing or environmental only by citing where the Run recorded it — a `decision` or `note` in the workflow log, or something the task you were given names. Without that it is a new finding, and you report it as one.
+
+Then take one of the two paths above. If the task owns `.devcontainer/`, add what is missing, rebuild, re-run what the result depends on, and report the old and the new `image_id`. If it does not, report it as a blocker through the channel your role owns — `dispatch ask` for a role — with the exact command, its exit status and the error line, and keep working on whatever that does not block. Do not install it inside the container, do not run the command on the host, and do not drop the failing part from the command so that the rest passes.
+
+Either way, the report lists what stayed unverified: each command that failed for the environment's sake, and which part of what you were asked to verify it leaves unproven. The coordinator can then decide about it instead of discovering it later.
+
 ## Long commands
 
 A build that outlives its own stream is not lost. When a command passes a `--timeout`, the error names the `exec_id` it is still running under; reattach with:
@@ -85,6 +95,8 @@ oat-agents env evidence
 Every entry says whether it ran against the tree as it stands, in the image you are running, and lists under `reuse_blocked_by` any mechanical reason it cannot stand in for a re-run — the code changed after it, or during it, the image differs, it exited non-zero, it never came back. An empty list means none of those apply. It does not mean the command is worth reusing; that depends on whether the command is reproducible, which the ledger cannot see and you can.
 
 A fresh environment is not by itself a reason to re-establish a fact the ledger already holds.
+
+A report you are checking that calls a failure environmental, known or pre-existing without citing where the Run recorded it is a finding, not context: whatever that failure covered was not verified.
 
 ## What the fingerprint covers
 
