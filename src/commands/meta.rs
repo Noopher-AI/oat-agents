@@ -71,6 +71,8 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     let (resolved, catalog) = plugins::gate(&repo, env)?;
     let catalog = &catalog;
     let core_role = catalog.core_role(CoreRole::Meta)?;
+    // Settled once, with the plugins: a Run keeps the limits it started with.
+    let role_limits = crate::concurrency::resolve_limits(&repo, catalog)?;
 
     let run_name = args
         .name
@@ -124,6 +126,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         meta_worktree: Some(path.to_string_lossy().to_string()),
         meta_dispatch_id: Some(dispatch_id.clone()),
         big_plan: Some(big_plan.clone()),
+        role_limits,
     };
     store.create_run(&run_record)?;
 
@@ -198,6 +201,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": exec.to_json(),
+        "role_limits": run_record.role_limits,
     }))
 }
 
@@ -280,6 +284,20 @@ fn finish(args: FinishArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) 
     run_record.closed_at = Some(now_iso());
     store.save_run(&run_record)?;
 
+    // A closed Run launches nothing more; what was still waiting for a place is dropped and
+    // said so.
+    let dropped = crate::concurrency::Queue::for_run(&store, &run_id).drop_waiting()?;
+    for entry in &dropped {
+        log.record(&LogEntry {
+            timestamp: now_iso(),
+            run_id: run_id.clone(),
+            dispatch_id: Some(entry.dispatch_id.clone()),
+            agent: Some(entry.role.clone()),
+            event: events::DISPATCH_DROPPED.to_string(),
+            details: Some(json!({"role": entry.role, "name": entry.name})),
+        })?;
+    }
+
     let meta_dispatch_id = run_record.meta_dispatch_id.clone();
     if let Some(dispatch_id) = &meta_dispatch_id {
         if let Ok(mut dispatch) = store.load_dispatch(&run_id, dispatch_id) {
@@ -316,6 +334,7 @@ fn finish(args: FinishArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) 
         "closed_at": run_record.closed_at,
         "cleanup": cleanup,
         "environments": environments,
+        "dropped_from_queue": dropped.iter().map(|entry| &entry.dispatch_id).collect::<Vec<_>>(),
     });
 
     // The receipt above is what settles the Run; killing the coordinator's own tmux session

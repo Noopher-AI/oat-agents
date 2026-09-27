@@ -46,6 +46,10 @@ pub struct RoleToml {
     pub exec_environment: bool,
     #[serde(default)]
     pub prior_verification: bool,
+    /// How many of this role's Dispatches may run at once in one Run; absent means no limit.
+    /// A repository lowers or raises it in `.oat/roles.toml`.
+    #[serde(default)]
+    pub max_concurrent: Option<u32>,
     #[serde(default)]
     pub skills: Vec<String>,
     #[serde(default)]

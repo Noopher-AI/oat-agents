@@ -34,6 +34,10 @@ pub struct RunRecord {
     pub meta_dispatch_id: Option<String>,
     #[serde(default)]
     pub big_plan: Option<String>,
+    /// How many Dispatches of each role may run at once, settled at `meta fire` from the
+    /// plugins' defaults and `.oat/roles.toml`. A role not listed has no limit.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub role_limits: std::collections::BTreeMap<String, u32>,
 }
 
 impl RunRecord {
@@ -102,6 +106,9 @@ pub enum MessageKind {
     WorkerDone,
     Question,
     Escalation,
+    /// A queued `role fire` that could not be launched when its place came free. Nobody is
+    /// waiting for a reply to it.
+    LaunchFailed,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -501,6 +508,7 @@ mod tests {
             meta_worktree: None,
             meta_dispatch_id: None,
             big_plan: None,
+            role_limits: Default::default(),
         };
         store.create_run(&empty).unwrap();
         assert_eq!(store.load_run("r1").unwrap().plugins, Vec::new());

@@ -39,3 +39,4 @@ citation does not resolve or a record is missing from the list below.
 | ADR-0003 | Plugin content lands only in the Dispatch's worktree |
 | ADR-0004 | The CLI owns the agents and how the workflow runs; plugins own how a team works |
 | ADR-0005 | A console belongs to one repository |
+| ADR-0006 | A role's concurrency limit is a plugin default the repository overrides, and the CLI queues past it |

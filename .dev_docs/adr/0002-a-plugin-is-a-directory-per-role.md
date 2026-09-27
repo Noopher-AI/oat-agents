@@ -14,7 +14,8 @@ Run.
 ├── oat-plugin.toml        format version, name, description
 ├── roles/<role>/
 │   ├── role.toml          description, start location, execution environment,
-│   │                      prior verification, skills, per-backend model
+│   │                      prior verification, concurrency limit (ADR-0006),
+│   │                      skills, per-backend model
 │   └── instructions.md
 ├── skills/<skill>/
 │   ├── SKILL.md           the standard skill file both backends read

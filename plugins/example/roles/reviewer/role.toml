@@ -2,3 +2,4 @@ description = "Checks a worker's change against its task independently and retur
 start = "existing"
 exec_environment = true
 prior_verification = true
+max_concurrent = 3

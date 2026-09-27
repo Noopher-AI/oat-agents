@@ -209,6 +209,10 @@ pub mod events {
     pub const EXEC_PROFILE_NONE: &str = "exec_profile_none";
     pub const ENV_SKIPPED: &str = "env_skipped";
     pub const PLUGINS_RESOLVED: &str = "plugins_resolved";
+    pub const DISPATCH_QUEUED: &str = "dispatch_queued";
+    pub const DISPATCH_DEQUEUED: &str = "dispatch_dequeued";
+    pub const QUEUED_LAUNCH_FAILED: &str = "queued_launch_failed";
+    pub const DISPATCH_DROPPED: &str = "dispatch_dropped";
 }
 
 /// Milliseconds since the epoch, for the execution ledger's timestamps.

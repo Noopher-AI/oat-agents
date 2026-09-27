@@ -1,4 +1,5 @@
 description = "Implements a task or plan, tests what it changed, commits, and reports the result."
 start = "fresh"
 exec_environment = true
+max_concurrent = 3
 skills = ["branch-naming"]

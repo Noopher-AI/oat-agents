@@ -1,3 +1,4 @@
+use crate::env::integration::ExecEnvironments;
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
@@ -99,13 +100,13 @@ fn bound_dispatch(dispatch: &Option<String>, env: &dyn Environment) -> Result<St
         })
 }
 
-pub fn run(command: DispatchCommand, env: &dyn Environment) -> Result<Value> {
+pub fn run(command: DispatchCommand, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     match command {
         DispatchCommand::Done(args) => done(args, env),
         DispatchCommand::Ask(args) => ask(args, env),
         DispatchCommand::Show(args) => show(args, env),
         DispatchCommand::Read(args) => read(args, env),
-        DispatchCommand::Release(args) => release(args, env),
+        DispatchCommand::Release(args) => release(args, env, exec),
     }
 }
 
@@ -262,7 +263,7 @@ fn read(args: ReadArgs, env: &dyn Environment) -> Result<Value> {
     Err(err(codes::TRANSCRIPT_NOT_FOUND, "no transcript or terminal screen available"))
 }
 
-fn release(args: ReleaseArgs, env: &dyn Environment) -> Result<Value> {
+fn release(args: ReleaseArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     let run_id = bound_run(&args.run, env)?;
     let dispatch_id = bound_dispatch(&args.dispatch, env)?;
     let store = Store::open(env)?;
@@ -316,5 +317,16 @@ fn release(args: ReleaseArgs, env: &dyn Environment) -> Result<Value> {
     dispatch.released_at = Some(now_iso());
     store.save_dispatch(&dispatch)?;
 
-    Ok(json!({"run_id": run_id, "dispatch_id": dispatch_id, "released": true, "worktree": removal}))
+    // The release is done whatever the queue does; a failure to start what was waiting is
+    // reported beside it, not in place of it.
+    let queue = super::role::drain_queue(env, exec, &run_id)
+        .unwrap_or_else(|error| json!({"error": format!("{error:#}")}));
+
+    Ok(json!({
+        "run_id": run_id,
+        "dispatch_id": dispatch_id,
+        "released": true,
+        "worktree": removal,
+        "queue": queue,
+    }))
 }

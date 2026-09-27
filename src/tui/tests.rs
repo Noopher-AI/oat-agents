@@ -160,6 +160,7 @@ fn fixture() -> Fixture {
         meta_worktree: None,
         meta_dispatch_id: Some("dispatch-0".to_string()),
         big_plan: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
+        role_limits: Default::default(),
     };
     store.create_run(&open).unwrap();
     store

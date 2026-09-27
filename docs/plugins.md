@@ -19,7 +19,8 @@ format.
 ├── oat-plugin.toml        format version, name, description
 ├── roles/<role>/
 │   ├── role.toml          description, start location, execution environment,
-│   │                      prior verification, skills, per-backend model
+│   │                      prior verification, concurrency limit, skills,
+│   │                      per-backend model
 │   └── instructions.md
 ├── skills/<skill>/
 │   ├── SKILL.md           the standard skill file both backends read
@@ -56,6 +57,7 @@ description = "Starts a fresh worktree, requires an execution environment, and p
 start = "fresh"
 exec_environment = true
 prior_verification = true
+max_concurrent = 2
 skills = ["sample-skill"]
 
 [model.claude]
@@ -75,6 +77,11 @@ reasoning_effort = "high"
   what that means at launch time; this plugin only declares whether the role wants one).
 - `prior_verification` — whether a Dispatch of this role's prompt carries the execution
   ledger's prior verification of its worktree (again, F2's concern at launch time).
+- `max_concurrent` — optional: how many Dispatches of this role one Run may run at once, at
+  least `1`. Leaving it out means no limit. It is this plugin's default; a repository replaces
+  it in `.oat/roles.toml` (see below). A Dispatch holds its place from launch until it is
+  settled or released, and a `role fire` beyond the limit waits in the Run's queue until a
+  place comes free.
 - `skills` — the names of skills, from this same plugin's `skills/`, that a Dispatch of this
   role may load. A name with no matching `skills/<name>/` directory is refused.
 - `[model.claude]` / `[model.codex]` — optional per-backend `model` and `reasoning_effort`.
@@ -83,6 +90,32 @@ reasoning_effort = "high"
 `roles/<role>/instructions.md` is plain Markdown: the role's own working instructions, placed
 in the prompt after the core role protocol and before the task. It may reference one of the
 role's declared skills as `$skill-name` (see below).
+
+## Limiting a role in a repository: `.oat/roles.toml`
+
+A repository sets its own limit on any plugin role, replacing the plugin's `max_concurrent`:
+
+```toml
+[worker]
+max_concurrent = 2
+
+[reviewer]
+max_concurrent = 1
+```
+
+`meta fire` settles each role's limit once — the repository's value where it names the role,
+the plugin's otherwise — and records it in the Run, so a change to either file affects the next
+Run, never one already running. A table naming a role no plugin of the Run supplies, a core
+role, an unknown field, or a limit of `0` refuses the Run with `role_limits_invalid` before
+anything is created. A repository cannot lift a plugin's limit to "none"; it can only set a
+number.
+
+A `role fire` over the limit answers `"queued": true` with the Dispatch's id. The coordinator's
+own `run wait`, `dispatch release` and `role fire` start queued launches, oldest first, as
+places come free, and the workflow log records `dispatch_queued`, `dispatch_dequeued`,
+`queued_launch_failed` and `dispatch_dropped` (a launch still queued when the Run finishes).
+A queued launch that fails when its turn comes is sent to the Run inbox as a `launch_failed`
+message.
 
 ## `skills/<skill>/`
 

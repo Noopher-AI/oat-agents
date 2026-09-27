@@ -26,6 +26,13 @@ backend's own default.
 required for a role that starts in an existing Dispatch's worktree, and refused for one that
 starts fresh.
 
+A role can be limited in how many of its Dispatches run at once in one Run: the plugin's
+`role.toml` sets a default `max_concurrent`, and the repository overrides it in
+`.oat/roles.toml`. A `role fire` beyond the limit is queued, not refused — it answers
+`"queued": true` with the Dispatch's id and its place in line, and the CLI starts it when a
+place comes free. The limits a Run started with are in `meta fire`'s output under
+`role_limits`.
+
 ## Observing a Run without taking it over
 
 - `dispatch show --dispatch <id> [--run <id>]` — a Dispatch's record and whether its session

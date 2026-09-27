@@ -1,3 +1,4 @@
+use crate::env::integration::ExecEnvironments;
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
@@ -63,23 +64,28 @@ fn bound_run(run: &Option<String>, env: &dyn Environment) -> Result<String> {
         .ok_or_else(|| err(codes::RUN_NOT_BOUND, "no run bound; pass --run or set OAT_RUN_ID"))
 }
 
-pub fn run(command: RunCommand, env: &dyn Environment) -> Result<Value> {
+pub fn run(command: RunCommand, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     match command {
-        RunCommand::Wait(args) => wait(args, env),
+        RunCommand::Wait(args) => wait(args, env, exec),
         RunCommand::Ack(args) => ack(args, env),
         RunCommand::Reply(args) => reply(args, env),
         RunCommand::Clean(args) => clean(args, env),
     }
 }
 
-fn wait(args: WaitArgs, env: &dyn Environment) -> Result<Value> {
+fn wait(args: WaitArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> Result<Value> {
     let run_id = bound_run(&args.run, env)?;
     let store = Store::open(env)?;
     let log = EventLog::open(env);
     let timeout = Duration::from_millis(args.timeout_ms);
     let poll = Duration::from_millis(500);
 
+    // A place may have come free while the coordinator was not waiting; a queued launch that
+    // fails lands in the inbox and so in this very wait.
+    let mut started = queue_started(env, exec, &run_id);
     let delivery = store.wait_inbox(&run_id, timeout, poll)?;
+    // A delivery is usually a settlement, which is what frees a place.
+    started.extend(queue_started(env, exec, &run_id));
 
     match delivery {
         Some(delivery) => {
@@ -110,6 +116,7 @@ fn wait(args: WaitArgs, env: &dyn Environment) -> Result<Value> {
                 "messages": delivery.messages,
                 "acked": args.ack,
                 "timed_out": false,
+                "started_from_queue": started,
             }))
         }
         None => {
@@ -122,13 +129,29 @@ fn wait(args: WaitArgs, env: &dyn Environment) -> Result<Value> {
                 details: None,
             })?;
             let liveness_report = liveness::report_for_run(env, &store, &run_id)?;
+            let queued: Vec<Value> = crate::concurrency::Queue::for_run(&store, &run_id)
+                .waiting()?
+                .into_iter()
+                .map(|entry| json!({"dispatch_id": entry.dispatch_id, "role": entry.role, "name": entry.name}))
+                .collect();
             Ok(json!({
                 "run_id": run_id,
                 "timed_out": true,
                 "liveness": liveness_report,
+                "queued": queued,
+                "started_from_queue": started,
             }))
         }
     }
+}
+
+/// The Dispatches this pass over the queue started. Waiting must not fail because a launch
+/// did: a failed one is already in the inbox.
+fn queue_started(env: &dyn Environment, exec: &dyn ExecEnvironments, run_id: &str) -> Vec<Value> {
+    super::role::drain_queue(env, exec, run_id)
+        .ok()
+        .and_then(|report| report["started"].as_array().cloned())
+        .unwrap_or_default()
 }
 
 fn ack(args: AckArgs, env: &dyn Environment) -> Result<Value> {

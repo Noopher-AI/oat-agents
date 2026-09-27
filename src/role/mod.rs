@@ -70,6 +70,9 @@ pub struct RoleDefinition {
     pub start: StartLocation,
     pub exec_environment: bool,
     pub prior_verification: bool,
+    /// The plugin's default for how many Dispatches of this role one Run may run at once;
+    /// `None` is no limit. The Run's effective limit is in its record.
+    pub max_concurrent: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

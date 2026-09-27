@@ -2,11 +2,13 @@ use super::generate_id;
 use crate::env::integration::ExecEnvironments;
 use crate::env::state::EnvStore;
 use crate::environment::Environment;
+use crate::concurrency::{Queue, QueuedFire};
 use crate::error::{codes, err};
+use crate::event_log::{events, now_iso, EventLog, LogEntry};
 use crate::launch::{self, LaunchSpec};
 use crate::plugins::snapshot::catalog_from_snapshot;
 use crate::role::{Backend, RoleCatalog, RoleDefinition, StartLocation};
-use crate::store::{RunRecord, Store};
+use crate::store::{MessageKind, RunRecord, Store};
 use crate::worktree;
 use anyhow::Result;
 use clap::{Args, Subcommand};
@@ -50,36 +52,200 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
 
     let store = Store::open(env)?;
     let run_record: RunRecord = store.load_run(&run_id)?;
-    let repo = PathBuf::from(&run_record.repo);
-
-    let agent = args.agent.clone().unwrap_or_else(|| run_record.backend.clone());
-    let backend = Backend::from_str(&agent)?;
 
     // The Run's plugins were resolved and trust-checked once, at `meta fire` (F5's Architecture:
     // "Snapshot"); every role launch inside it rebuilds its catalog from that copy rather than
     // re-reading `.oat/plugins.toml` or re-checking trust.
     let catalog = catalog_from_snapshot(&store.run_plugin_snapshot_dir(&run_id))?;
-    let catalog = &catalog;
-    let role_def = catalog.role(&args.role)?;
 
-    match (role_def.start, &args.from) {
-        (StartLocation::Fresh, Some(_)) => {
-            return Err(err(
-                codes::INVALID_ROLE_OPTION,
-                format!("role '{}' starts fresh; --from is not accepted", args.role),
-            ))
-        }
-        (StartLocation::Existing, None) => {
-            return Err(err(
-                codes::ROLE_SOURCE_REQUIRED,
-                format!("role '{}' starts in an existing worktree; --from is required", args.role),
-            ))
-        }
-        _ => {}
+    let request = QueuedFire {
+        seq: 0,
+        dispatch_id: generate_id("dispatch"),
+        role: args.role.clone(),
+        from: args.from.clone(),
+        name: args.name.clone(),
+        agent: args.agent.clone(),
+        trust_workspace: args.trust_workspace,
+        task,
+        queued_at: now_iso(),
+        claimed_by: None,
+    };
+    // Whatever would refuse the launch refuses it now, not when a place comes free.
+    check_request(&request, &catalog, &run_record)?;
+
+    let Some(&limit) = run_record.role_limits.get(&args.role) else {
+        return launch(env, exec, &store, &run_record, &catalog, &request);
+    };
+
+    // A limited role always goes through the queue, so a launch never overtakes one that was
+    // waiting before it.
+    let queue = Queue::for_run(&store, &run_id);
+    let queued = queue.push(request)?;
+    let drained = drain_with(env, exec, &store, &run_record, &catalog, Some(&queued.dispatch_id))?;
+    if let Some(own) = drained.own {
+        return own.map(|mut value| {
+            value["started_from_queue"] = json!(drained.started);
+            value
+        });
     }
 
-    let launch_name = args.name.clone().unwrap_or_else(|| generate_id(&args.role));
-    let dispatch_id = generate_id("dispatch");
+    let active = queue.active(&args.role)?;
+    let position = queue
+        .waiting()?
+        .iter()
+        .position(|entry| entry.dispatch_id == queued.dispatch_id)
+        .map(|index| index + 1);
+    EventLog::open(env).record(&LogEntry {
+        timestamp: now_iso(),
+        run_id: run_id.clone(),
+        dispatch_id: Some(queued.dispatch_id.clone()),
+        agent: Some(args.role.clone()),
+        event: events::DISPATCH_QUEUED.to_string(),
+        details: Some(json!({"role": args.role, "name": args.name, "max_concurrent": limit, "active": active})),
+    })?;
+    Ok(json!({
+        "run_id": run_id,
+        "dispatch_id": queued.dispatch_id,
+        "role": args.role,
+        "queued": true,
+        "position": position,
+        "max_concurrent": limit,
+        "active": active,
+        "started_from_queue": drained.started,
+    }))
+}
+
+/// Refuses a `role fire` that could never launch: an unknown role, a start location the
+/// arguments contradict, a backend or a worktree that does not exist.
+fn check_request(request: &QueuedFire, catalog: &dyn RoleCatalog, run_record: &RunRecord) -> Result<()> {
+    let role_def = catalog.role(&request.role)?;
+    if let Some(agent) = &request.agent {
+        Backend::from_str(agent)?;
+    }
+    match (role_def.start, &request.from) {
+        (StartLocation::Fresh, Some(_)) => Err(err(
+            codes::INVALID_ROLE_OPTION,
+            format!("role '{}' starts fresh; --from is not accepted", request.role),
+        )),
+        (StartLocation::Existing, None) => Err(err(
+            codes::ROLE_SOURCE_REQUIRED,
+            format!("role '{}' starts in an existing worktree; --from is required", request.role),
+        )),
+        (StartLocation::Existing, Some(from)) => existing_worktree(from, run_record).map(|_| ()),
+        (StartLocation::Fresh, None) => Ok(()),
+    }
+}
+
+fn existing_worktree(from: &Path, run_record: &RunRecord) -> Result<PathBuf> {
+    let canonical = from
+        .canonicalize()
+        .map_err(|_| err(codes::INVALID_WORKTREE_ID, format!("no such worktree: {}", from.display())))?;
+    if !worktree::is_worktree_of(Path::new(&run_record.repo), &canonical)? {
+        return Err(err(
+            codes::INVALID_WORKTREE_ID,
+            format!("'{}' is not a worktree of this Run's repository", canonical.display()),
+        ));
+    }
+    Ok(canonical)
+}
+
+/// What one pass over the queue did. `own` is the outcome for the `role fire` that ran the
+/// pass, when its own entry was launched in it.
+struct Drained {
+    own: Option<Result<Value>>,
+    started: Vec<String>,
+    failed: Vec<String>,
+}
+
+/// Launches every queued `role fire` whose role has a free place, oldest first. Run from the
+/// coordinator's own commands — `role fire`, `run wait`, `dispatch release` — so a launch is
+/// never cut short by a session being released under it.
+pub fn drain_queue(env: &dyn Environment, exec: &dyn ExecEnvironments, run_id: &str) -> Result<Value> {
+    let store = Store::open(env)?;
+    if Queue::for_run(&store, run_id).waiting()?.is_empty() {
+        return Ok(json!({"started": [], "failed": []}));
+    }
+    let run_record = store.load_run(run_id)?;
+    let catalog = catalog_from_snapshot(&store.run_plugin_snapshot_dir(run_id))?;
+    let drained = drain_with(env, exec, &store, &run_record, &catalog, None)?;
+    Ok(json!({"started": drained.started, "failed": drained.failed}))
+}
+
+fn drain_with(
+    env: &dyn Environment,
+    exec: &dyn ExecEnvironments,
+    store: &Store,
+    run_record: &RunRecord,
+    catalog: &dyn RoleCatalog,
+    own: Option<&str>,
+) -> Result<Drained> {
+    let mut drained = Drained { own: None, started: Vec::new(), failed: Vec::new() };
+    if !run_record.is_open() {
+        return Ok(drained);
+    }
+    let queue = Queue::for_run(store, &run_record.id);
+    let log = EventLog::open(env);
+    while let Some(entry) = queue.claim_next(&run_record.role_limits)? {
+        let result = launch(env, exec, store, run_record, catalog, &entry);
+        queue.release_claim(&entry)?;
+        if own == Some(entry.dispatch_id.as_str()) {
+            drained.own = Some(result);
+            continue;
+        }
+        match result {
+            Ok(_) => {
+                log.record(&LogEntry {
+                    timestamp: now_iso(),
+                    run_id: run_record.id.clone(),
+                    dispatch_id: Some(entry.dispatch_id.clone()),
+                    agent: Some(entry.role.clone()),
+                    event: events::DISPATCH_DEQUEUED.to_string(),
+                    details: Some(json!({"role": entry.role, "queued_at": entry.queued_at})),
+                })?;
+                drained.started.push(entry.dispatch_id);
+            }
+            Err(error) => {
+                // Nobody is waiting on this launch's output any more; the coordinator hears of
+                // the failure the way it hears of everything else, through the Run inbox.
+                let message = format!(
+                    "the queued launch of role '{}' ({}) failed when its place came free: {error:#}",
+                    entry.role,
+                    entry.name.as_deref().unwrap_or("unnamed"),
+                );
+                store.append_inbox(&run_record.id, &entry.dispatch_id, MessageKind::LaunchFailed, &message)?;
+                log.record(&LogEntry {
+                    timestamp: now_iso(),
+                    run_id: run_record.id.clone(),
+                    dispatch_id: Some(entry.dispatch_id.clone()),
+                    agent: Some(entry.role.clone()),
+                    event: events::QUEUED_LAUNCH_FAILED.to_string(),
+                    details: Some(json!({"role": entry.role, "error": format!("{error:#}")})),
+                })?;
+                drained.failed.push(entry.dispatch_id);
+            }
+        }
+    }
+    Ok(drained)
+}
+
+fn launch(
+    env: &dyn Environment,
+    exec: &dyn ExecEnvironments,
+    store: &Store,
+    run_record: &RunRecord,
+    catalog: &dyn RoleCatalog,
+    request: &QueuedFire,
+) -> Result<Value> {
+    check_request(request, catalog, run_record)?;
+    let run_id = run_record.id.clone();
+    let repo = PathBuf::from(&run_record.repo);
+    let agent = request.agent.clone().unwrap_or_else(|| run_record.backend.clone());
+    let backend = Backend::from_str(&agent)?;
+    let role_def = catalog.role(&request.role)?;
+    let task = request.task.clone();
+
+    let launch_name = request.name.clone().unwrap_or_else(|| generate_id(&request.role));
+    let dispatch_id = request.dispatch_id.clone();
 
     let (worktree_path, branch, created_fresh) = match role_def.start {
         StartLocation::Fresh => {
@@ -95,16 +261,8 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
             (path, branch, true)
         }
         StartLocation::Existing => {
-            let from = args.from.clone().unwrap();
-            let canonical = from
-                .canonicalize()
-                .map_err(|_| err(codes::INVALID_WORKTREE_ID, format!("no such worktree: {}", from.display())))?;
-            if !worktree::is_worktree_of(&repo, &canonical)? {
-                return Err(err(
-                    codes::INVALID_WORKTREE_ID,
-                    format!("'{}' is not a worktree of this Run's repository", canonical.display()),
-                ));
-            }
+            let from = request.from.as_deref().unwrap_or(Path::new(""));
+            let canonical = existing_worktree(from, run_record)?;
             let branch_output = worktree::run_git(&canonical, &["rev-parse", "--abbrev-ref", "HEAD"])?;
             let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
             (canonical, branch, false)
@@ -113,17 +271,17 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
 
     if backend == Backend::Claude {
         let _ = launch::write_claude_local_settings(&worktree_path);
-        if args.trust_workspace {
+        if request.trust_workspace {
             let _ = launch::trust_claude_workspace(env, &worktree_path);
         }
     }
 
     let model = role_def.models.get(&backend).cloned().unwrap_or_default();
 
-    let log = crate::event_log::EventLog::open(env);
+    let log = EventLog::open(env);
     let mut skills = role_def.skills.clone();
     let mut instructions = vec![role_def.instructions.clone()];
-    let env_binding = bring_up_environment(env, &log, &run_id, role_def, &args.role, &worktree_path, exec)?;
+    let env_binding = bring_up_environment(env, &log, &run_id, role_def, &request.role, &worktree_path, exec)?;
     match &env_binding {
         EnvBinding::Bound(record) => {
             skills.push(crate::env::exec_environment_skill());
@@ -139,8 +297,8 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
 
     let spec = LaunchSpec {
         run: run_record.clone(),
-        role_label: args.role.clone(),
-        name: dispatch_name(&args.role, args.name.as_deref(), (!created_fresh).then_some(branch.as_str())),
+        role_label: request.role.clone(),
+        name: dispatch_name(&request.role, request.name.as_deref(), (!created_fresh).then_some(branch.as_str())),
         is_core: false,
         worktree: worktree_path.clone(),
         branch: branch.clone(),
@@ -157,7 +315,7 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
 
     let (dispatch, dispatch_dir) = launch::launch_dispatch(
         env,
-        &store,
+        store,
         &log,
         spec,
         dispatch_id.clone(),
@@ -175,13 +333,13 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
             let mut dispatch_record = store.load_dispatch(&run_id, &dispatch.id)?;
             dispatch_record.env_skipped = Some(reason.clone());
             store.save_dispatch(&dispatch_record)?;
-            log.record(&crate::event_log::LogEntry {
-                timestamp: crate::event_log::now_iso(),
+            log.record(&LogEntry {
+                timestamp: now_iso(),
                 run_id: run_id.clone(),
                 dispatch_id: Some(dispatch.id.clone()),
-                agent: Some(args.role.clone()),
-                event: crate::event_log::events::ENV_SKIPPED.to_string(),
-                details: Some(json!({"role": args.role, "reason": reason})),
+                agent: Some(request.role.clone()),
+                event: events::ENV_SKIPPED.to_string(),
+                details: Some(json!({"role": request.role, "reason": reason})),
             })?;
         }
         EnvBinding::NotWanted => {}
@@ -190,7 +348,7 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
     Ok(json!({
         "run_id": run_id,
         "dispatch_id": dispatch.id,
-        "role": args.role,
+        "role": request.role,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),

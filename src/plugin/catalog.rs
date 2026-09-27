@@ -64,6 +64,7 @@ pub fn build_catalog(plugins: &[LoadedPlugin]) -> Result<PluginCatalog, Vec<Plug
                     start: role.start,
                     exec_environment: role.exec_environment,
                     prior_verification: role.prior_verification,
+                    max_concurrent: role.max_concurrent,
                 },
             );
         }

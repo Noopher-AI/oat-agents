@@ -163,6 +163,7 @@ fn each_repositorys_read_only_run_listing_only_shows_its_own_runs() {
         meta_worktree: None,
         meta_dispatch_id: None,
         big_plan: None,
+        role_limits: Default::default(),
     };
     store.create_run(&base).unwrap();
     let mut run_b = base.clone();

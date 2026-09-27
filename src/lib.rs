@@ -1,5 +1,6 @@
 pub mod checklist;
 pub mod commands;
+pub mod concurrency;
 pub mod console;
 pub mod env;
 pub mod environment;
@@ -132,8 +133,8 @@ pub fn execute_with_exec(
     match cli.command {
         TopCommand::Meta { command } => commands::meta::run(command, env, exec),
         TopCommand::Role { command } => commands::role::run(command, env, exec),
-        TopCommand::Run { command } => commands::run::run(command, env),
-        TopCommand::Dispatch { command } => commands::dispatch::run(command, env),
+        TopCommand::Run { command } => commands::run::run(command, env, exec),
+        TopCommand::Dispatch { command } => commands::dispatch::run(command, env, exec),
         TopCommand::Log { command } => commands::log::run(command, env),
         TopCommand::BigPlan { command } => commands::big_plan::run(command, env),
         TopCommand::Checklist { command } => commands::checklist::run(command, env),

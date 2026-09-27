@@ -7,7 +7,15 @@ Delegate bounded work with `role fire <role>`, using the role names this Run's p
 listed. Give every launch `--name`: a short slug for the piece of work it serves, such as
 `s3-f8-links`, not the role and not the Run, which its hash_id already carries. Keep the same
 name for that work's correction rounds and its review, so the live view shows which
-Dispatches belong together. Wait for the Run inbox with one long `run wait` per checkpoint rather than polling it
+Dispatches belong together. A role may be limited in how many of its Dispatches run at once. When it is full, `role fire`
+answers `"queued": true` with the Dispatch's id and its place in line instead of launching:
+the CLI starts it by itself when a place comes free, and reports that under
+`started_from_queue` in the `run wait`, `dispatch release` or `role fire` that started it. Do
+not fire it again. A queued launch that fails when its turn comes reaches you as a
+`launch_failed` message; nothing waits for a reply to it. A Dispatch holds its place until it
+is settled or released.
+
+Wait for the Run inbox with one long `run wait` per checkpoint rather than polling it
 yourself; when it times out, it carries a liveness report for every still-active Dispatch —
 `working`, `waiting` or `stalled`, how long each has been silent, and whether that silence has
 outlasted the kind of work it is doing. Decide from that whether to keep waiting, and act

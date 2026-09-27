@@ -38,6 +38,13 @@ named nothing.
 *Avoid*: deriving a hash_id anywhere but from the Dispatch's record — a copy that uses a
 different name looks for a session that does not exist.
 
+**Queued launch**
+A `role fire` for a role already at its concurrency limit in the Run, waiting for a place. It
+already has the id its Dispatch will carry, but it is not a Dispatch yet: it has no worktree and
+no session, and the CLI launches it when a place comes free.
+*Avoid*: firing it again — it will start on its own, and a second fire queues a second copy of
+the same work.
+
 **Settle**
 What an agent does to end its own Dispatch with an outcome and a report. A Dispatch that is
 not settled is not finished, whatever its terminal shows.

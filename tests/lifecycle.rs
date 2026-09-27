@@ -18,6 +18,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
             start: StartLocation::Fresh,
             exec_environment: false,
             prior_verification: false,
+            max_concurrent: None,
         })
         .with_role(RoleDefinition {
             name: "reviewer".to_string(),
@@ -27,6 +28,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
             start: StartLocation::Existing,
             exec_environment: false,
             prior_verification: false,
+            max_concurrent: None,
         })
         .with_core_role(
             CoreRole::Meta,
@@ -145,6 +147,7 @@ fn role_fire_defaults_to_the_run_s_recorded_backend() {
             start: StartLocation::Fresh,
             exec_environment: false,
             prior_verification: false,
+            max_concurrent: None,
         })
         .with_core_role(
             CoreRole::Meta,

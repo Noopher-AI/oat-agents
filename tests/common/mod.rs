@@ -144,6 +144,15 @@ impl PluginBuilder {
         self
     }
 
+    /// Gives an already-written role the plugin's default `max_concurrent`.
+    pub fn max_concurrent(self, role: &str, limit: u32) -> Self {
+        let path = self.dir.join("roles").join(role).join("role.toml");
+        let mut contents = std::fs::read_to_string(&path).unwrap();
+        contents.push_str(&format!("max_concurrent = {limit}\n"));
+        std::fs::write(path, contents).unwrap();
+        self
+    }
+
     pub fn core(self, slug: &str, instructions: &str) -> Self {
         self.core_with(slug, instructions, &[])
     }

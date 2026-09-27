@@ -103,6 +103,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
             start: StartLocation::Fresh,
             exec_environment,
             prior_verification,
+            max_concurrent: None,
         })
         .with_core_role(
             CoreRole::Meta,

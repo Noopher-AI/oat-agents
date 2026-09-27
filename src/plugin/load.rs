@@ -20,6 +20,7 @@ pub struct LoadedRole {
     pub start: StartLocation,
     pub exec_environment: bool,
     pub prior_verification: bool,
+    pub max_concurrent: Option<u32>,
     pub skills: Vec<SkillRef>,
     pub models: BTreeMap<Backend, ModelSetting>,
 }
@@ -277,6 +278,11 @@ fn load_role(
         }
     };
 
+    if role_toml.max_concurrent == Some(0) {
+        errors.push(PluginError::new(dir, &toml_file, "max_concurrent must be at least 1".to_string()));
+        return None;
+    }
+
     let resolved_skills = resolve_skills(dir, &toml_file, &role_toml.skills, skills, errors);
     let models = convert_models(dir, &toml_file, role_toml.model, errors);
 
@@ -289,6 +295,7 @@ fn load_role(
         },
         exec_environment: role_toml.exec_environment,
         prior_verification: role_toml.prior_verification,
+        max_concurrent: role_toml.max_concurrent,
         skills: resolved_skills,
         models,
     })
