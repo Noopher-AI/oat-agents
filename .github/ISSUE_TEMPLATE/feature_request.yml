@@ -1,0 +1,30 @@
+name: Feature request
+description: Suggest an improvement or a new capability for oat-agents
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem are you trying to solve? Why is the current behavior insufficient?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What would the CLI, plugin format, or behavior change look like?
+    validations:
+      required: true
+  - type: dropdown
+    id: core-or-plugin
+    attributes:
+      label: Core or plugin?
+      description: The core owns the mechanism; how a team works belongs in a plugin (see CONTRIBUTING.md).
+      options:
+        - Core mechanism
+        - A hook the core should offer to plugins
+        - Plugin content (roles, skills, conventions)
+        - Not sure
+    validations:
+      required: true

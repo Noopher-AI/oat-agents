@@ -263,6 +263,12 @@ The full glossary, including the words we deliberately avoid, is in
 - [`.dev_docs/adr/`](.dev_docs/adr/): the architecture decisions
 - [`AGENTS.md`](AGENTS.md): how to work in this repository, including the verification commands
 
+## Contributing
+
+Issues and pull requests are welcome. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md); report
+vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md). Everyone taking part is
+expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
-MIT.
+[MIT](LICENSE).
