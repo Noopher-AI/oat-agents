@@ -41,3 +41,4 @@ citation does not resolve or a record is missing from the list below.
 | ADR-0005 | A console belongs to one repository |
 | ADR-0006 | A role's concurrency limit is a plugin default the repository overrides, and the CLI queues past it |
 | ADR-0007 | A role's backend and model are plugin defaults the repository overrides |
+| ADR-0008 | A git plugin may follow its latest commit |

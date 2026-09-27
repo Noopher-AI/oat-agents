@@ -1,6 +1,7 @@
 //! The trust store (ticket Architecture): `~/.oat/trust.toml`, one entry per (source, version),
 //! machine-only. Nothing under a repository is ever read as trust, and a changed pin voids
-//! trust simply because the version half of the key changes with it.
+//! trust simply because the version half of the key changes with it. A git pin that follows
+//! `latest` is keyed by `latest`, so its trust covers every commit it resolves to (ADR-0008).
 
 use crate::environment::Environment;
 use crate::error::{codes, err};

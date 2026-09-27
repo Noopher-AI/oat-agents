@@ -43,6 +43,21 @@ struct RawPin {
     content_hash: Option<String>,
 }
 
+/// The `commit` of a git pin that follows the plugin repository's default branch instead of
+/// one commit (ADR-0008).
+pub const LATEST: &str = "latest";
+
+/// A git pin's `commit`: a full commit id, lowercased, or `latest`.
+fn validate_git_commit(commit: &str) -> Result<String, String> {
+    if commit == LATEST {
+        return Ok(LATEST.to_string());
+    }
+    if commit.len() != 40 || !commit.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("'commit' must be a full 40-character commit id or '{LATEST}', got '{commit}'"));
+    }
+    Ok(commit.to_lowercase())
+}
+
 /// One validated entry from `.oat/plugins.toml` (ticket Architecture: "Pins").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PluginPin {
@@ -100,10 +115,8 @@ fn parse_pin(index: usize, raw: RawPin) -> Result<PluginPin> {
             if raw.path.is_some() || raw.content_hash.is_some() {
                 return Err(invalid("a git pin takes only 'name', 'url' and 'commit'".to_string()));
             }
-            if commit.len() != 40 || !commit.chars().all(|c| c.is_ascii_hexdigit()) {
-                return Err(invalid(format!("'commit' must be a full 40-character commit id, got '{commit}'")));
-            }
-            Ok(PluginPin::Git { name, url, commit: commit.to_lowercase() })
+            let commit = validate_git_commit(&commit).map_err(invalid)?;
+            Ok(PluginPin::Git { name, url, commit })
         }
         "path" => {
             let name = raw.name.ok_or_else(|| invalid("a path pin requires 'name'".to_string()))?;
@@ -188,6 +201,9 @@ pub struct ResolvedPlugin {
     pub declared_name: String,
     pub dir: PathBuf,
     pub trust_key: TrustKey,
+    /// The exact version that was loaded. It is the trust key's version, except for a git pin
+    /// that follows `latest`: that is trusted as `latest` and loaded at the commit it resolved to.
+    pub version: String,
 }
 
 impl ResolvedPlugin {
@@ -196,7 +212,7 @@ impl ResolvedPlugin {
     }
 
     pub fn version(&self) -> String {
-        self.trust_key.version().to_string()
+        self.version.clone()
     }
 }
 
@@ -213,13 +229,8 @@ pub fn embedded_pin(name: impl Into<String>) -> Result<PluginPin> {
 
 pub fn git_pin(name: impl Into<String>, url: impl Into<String>, commit: impl Into<String>) -> Result<PluginPin> {
     let (name, url, commit) = (name.into(), url.into(), commit.into());
-    if commit.len() != 40 || !commit.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(err(
-            codes::PLUGIN_PIN_INVALID,
-            format!("commit must be a full 40-character commit id, got '{commit}'"),
-        ));
-    }
-    Ok(PluginPin::Git { name, url, commit: commit.to_lowercase() })
+    let commit = validate_git_commit(&commit).map_err(|message| err(codes::PLUGIN_PIN_INVALID, message))?;
+    Ok(PluginPin::Git { name, url, commit })
 }
 
 pub fn path_pin_from_current_content(repo: &Path, path: impl Into<String>, name: impl Into<String>) -> Result<PluginPin> {
@@ -279,16 +290,19 @@ pub fn resolve_pin(repo: &Path, home: &Path, pin: &PluginPin) -> Result<Resolved
             Ok(ResolvedPlugin {
                 declared_name: declared,
                 dir,
-                trust_key: TrustKey::Embedded { name: name.clone(), version },
+                trust_key: TrustKey::Embedded { name: name.clone(), version: version.clone() },
+                version,
             })
         }
         PluginPin::Git { name, url, commit } => {
-            let dir = git::ensure_commit(home, url, commit)?;
+            let resolved_commit = if commit == LATEST { git::latest_commit(url)? } else { commit.clone() };
+            let dir = git::ensure_commit(home, url, &resolved_commit)?;
             let declared = check_declared_name(&dir, name, &format!("the git pin for '{url}'"))?;
             Ok(ResolvedPlugin {
                 declared_name: declared,
                 dir,
                 trust_key: TrustKey::Git { url: url.clone(), commit: commit.clone() },
+                version: resolved_commit,
             })
         }
         PluginPin::Path { name, path, content_hash } => {
@@ -327,6 +341,7 @@ pub fn resolve_pin(repo: &Path, home: &Path, pin: &PluginPin) -> Result<Resolved
                 declared_name: declared,
                 dir,
                 trust_key: TrustKey::Path { content_hash: content_hash.clone() },
+                version: content_hash.clone(),
             })
         }
     }
@@ -468,6 +483,50 @@ mod tests {
         let rendered = render_config(&pins);
         let parsed = parse_config_text(&rendered).unwrap();
         assert_eq!(parsed, pins);
+    }
+
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git").current_dir(dir).args(args).output().unwrap();
+        assert!(output.status.success(), "git {args:?} failed");
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn commit_plugin(source: &Path, description: &str) -> String {
+        write(&source.join("oat-plugin.toml"), &format!("format_version = 1\nname = \"team\"\ndescription = \"{description}\"\n"));
+        git(source, &["add", "."]);
+        git(source, &["commit", "--quiet", "-m", description]);
+        git(source, &["rev-parse", "HEAD"])
+    }
+
+    #[test]
+    fn a_latest_pin_is_trusted_as_latest_and_loads_the_commit_the_remote_is_at_now() {
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().join("repo");
+        init_repo(&repo);
+        let source = temp.path().join("source");
+        init_repo(&source);
+        git(&source, &["config", "user.email", "test@example.com"]);
+        git(&source, &["config", "user.name", "Test"]);
+        let first = commit_plugin(&source, "first");
+
+        let url = source.to_string_lossy().to_string();
+        let pin = parse_config_text(&format!(
+            "[[plugin]]\nsource = \"git\"\nname = \"team\"\nurl = \"{url}\"\ncommit = \"latest\"\n"
+        ))
+        .unwrap()
+        .remove(0);
+        let home = temp.path().join("home");
+
+        let resolved = resolve_pin(&repo, &home, &pin).unwrap();
+        assert_eq!(resolved.trust_key, TrustKey::Git { url: url.clone(), commit: LATEST.to_string() });
+        assert_eq!(resolved.version(), first, "a Run records the commit it actually loaded");
+
+        // The plugin moves on; the same pin, and the same trust, follow it.
+        let second = commit_plugin(&source, "second");
+        let resolved = resolve_pin(&repo, &home, &pin).unwrap();
+        assert_eq!(resolved.version(), second);
+        assert_eq!(resolved.trust_key.version(), LATEST);
+        assert!(std::fs::read_to_string(resolved.dir.join("oat-plugin.toml")).unwrap().contains("second"));
     }
 
     #[test]

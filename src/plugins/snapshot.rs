@@ -112,6 +112,7 @@ mod tests {
             declared_name: "sample-plugin".to_string(),
             dir: fixtures,
             trust_key: TrustKey::Path { content_hash: "sha256:aa".to_string() },
+            version: "sha256:aa".to_string(),
         }];
 
         let dest = temp.path().join("snapshot");
@@ -156,6 +157,7 @@ mod tests {
             declared_name: "reopen-plugin".to_string(),
             dir: source.clone(),
             trust_key: TrustKey::Path { content_hash: "sha256:aa".to_string() },
+            version: "sha256:aa".to_string(),
         }];
 
         let dest = temp.path().join("console").join("plugins");

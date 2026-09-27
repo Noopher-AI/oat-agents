@@ -40,6 +40,7 @@ pub struct TrustEmbeddedArgs {
 pub struct TrustGitArgs {
     #[arg(long)]
     pub url: String,
+    /// The full commit id, or `latest` to trust every commit the URL serves (ADR-0008).
     #[arg(long)]
     pub commit: String,
 }

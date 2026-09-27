@@ -92,6 +92,31 @@ fn fetch_into(tmp_dir: &Path, url: &str, commit: &str) -> Result<()> {
     Ok(())
 }
 
+/// The commit `url`'s default branch points at now, for a pin that follows `latest`
+/// (ADR-0008). Asked of the remote every time, never of the cache.
+pub fn latest_commit(url: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["ls-remote", "--quiet", url, "HEAD"])
+        .output()
+        .map_err(|e| err(codes::PLUGIN_FETCH_FAILED, format!("could not run git: {e}")))?;
+    if !output.status.success() {
+        return Err(err(
+            codes::PLUGIN_FETCH_FAILED,
+            format!(
+                "could not ask '{url}' for its latest commit: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .split_whitespace()
+        .next()
+        .filter(|commit| commit.len() == 40 && commit.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(str::to_lowercase)
+        .ok_or_else(|| err(codes::PLUGIN_FETCH_FAILED, format!("'{url}' reports no default branch to follow")))
+}
+
 fn verify_commit(dir: &Path, commit: &str) -> Result<bool> {
     let output = Command::new("git")
         .current_dir(dir)

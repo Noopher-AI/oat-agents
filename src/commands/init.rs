@@ -27,8 +27,8 @@ pub struct InitArgs {
     /// given.
     #[arg(long)]
     pub embedded: bool,
-    /// A git-pinned plugin: its URL, the full commit id to pin, and the name it must declare.
-    /// Repeatable.
+    /// A git-pinned plugin: its URL, the full commit id to pin (or `latest`, to follow its
+    /// default branch, ADR-0008), and the name it must declare. Repeatable.
     #[arg(long, num_args = 3, value_names = ["URL", "COMMIT", "NAME"])]
     pub git: Vec<String>,
     /// An in-repository plugin: its path relative to the repository root, and the name it must
