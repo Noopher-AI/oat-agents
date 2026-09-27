@@ -457,8 +457,8 @@ fn the_arrows_pick_an_agent_and_its_page_follows_on_the_tab_last_chosen() {
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("running 3 tests"), "{text}");
 
-    state.on_key_with(key(KeyCode::Tab), &control);
-    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
     assert_eq!(state.tab(), Tab::Timeline);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("· timeline "), "{text}");
@@ -536,14 +536,14 @@ fn selecting_a_live_agent_shows_its_screen_and_enter_hands_it_every_key() {
 
     state.on_key_with(ctrl(']'), &control);
     assert!(!state.typing());
-    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
     assert_eq!(state.tab(), Tab::Diff);
     assert!(!state.typing());
-    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
     assert_eq!(state.tab(), Tab::Timeline, "the timeline sits left of the log");
-    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
     assert_eq!(state.tab(), Tab::Log);
-    state.on_key_with(key(KeyCode::BackTab), &control);
+    state.on_key_with(key(KeyCode::Left), &control);
     assert_eq!(state.tab(), Tab::Timeline);
     assert_eq!(state.on_key_with(key(KeyCode::Esc), &control), Action::Back);
 }
@@ -561,7 +561,7 @@ fn the_diff_tab_shows_what_the_worktree_changed() {
     let mut state = fx.state();
     select(&mut state, "worker");
     state.sync_page(&control);
-    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Right), &control);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("added line"), "{text}");
     assert!(text.contains("since main"), "{text}");
@@ -584,7 +584,7 @@ fn a_finished_agent_has_its_timeline_and_its_log_which_says_where_it_ran() {
     let mut state = fx.state();
     select(&mut state, "worker");
     state.sync_page(&control);
-    state.on_key_with(key(KeyCode::BackTab), &control);
+    state.on_key_with(key(KeyCode::Left), &control);
     assert_eq!(state.tab(), Tab::Log);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("env pod:oat-env-worker   image 0123456789ab"), "{text}");
@@ -788,7 +788,7 @@ fn every_key_is_listed_in_at_most_three_rows_no_wider_than_the_cap() {
 
     let (mut state, _control, _) = watching_worker(&fx, "$ cargo test");
     let text = screen(160, 30, |frame| draw(frame, &mut state));
-    for key in ["enter type", "v/drag select", "tab tab:live", "x close run", "ctrl+l checklist", "q quit"] {
+    for key in ["enter type", "v/drag select", "←→ tab:live", "x close run", "ctrl+l checklist", "q quit"] {
         assert!(text.contains(key), "{key} missing:\n{text}");
     }
 }

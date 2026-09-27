@@ -945,7 +945,7 @@ impl TuiState {
         }
     }
 
-    /// Tab and shift+tab: the next or the previous of the page's tabs.
+    /// The right and left arrows: the next or the previous of the page's tabs.
     fn switch_tab(&mut self, forward: bool, control: &dyn Control) {
         let tab = self.tab();
         self.tab = if forward {
@@ -1084,8 +1084,9 @@ impl TuiState {
                 Some(preview) if on_preview && preview.scrolling() => preview.leave_scroll(),
                 _ => return Action::Back,
             },
-            KeyCode::Tab => self.switch_tab(true, control),
-            KeyCode::BackTab => self.switch_tab(false, control),
+            // Up and down pick the agent; left and right pick what to see of it.
+            KeyCode::Right | KeyCode::Char('l') => self.switch_tab(true, control),
+            KeyCode::Left | KeyCode::Char('h') => self.switch_tab(false, control),
             // Into the agent's terminal: the live tab is watched until Enter, which also
             // leaves any reading back, since typing is at the live screen.
             KeyCode::Enter if on_preview => {
@@ -1430,7 +1431,7 @@ impl TuiState {
             ),
         };
         if self.tabs().len() > 1 {
-            acts.push(item("tab", format!("tab:{}", self.tab().label())));
+            acts.push(item("←→", format!("tab:{}", self.tab().label())));
         }
         acts.push(self.close_item());
         // Esc is taken while selecting or reading back; backspace is not bound, so there
