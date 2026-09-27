@@ -34,8 +34,14 @@ fn project_dir(projects_root: &Path, worktree_path: &str) -> Option<PathBuf> {
     None
 }
 
-/// The newest `.jsonl` session file under a worktree's Claude Code project directory.
-pub fn find_transcript(projects_root: &Path, worktree_path: &str) -> Option<PathBuf> {
+/// The newest `.jsonl` session file under a worktree's Claude Code project directory, for a
+/// session the Claude backend runs. Any other backend has none: its worktree may be shared
+/// with a Claude-backed Dispatch — a reviewer reading a worker's branch — whose transcript
+/// would otherwise be passed off as its own.
+pub fn find_transcript(projects_root: &Path, backend: &str, worktree_path: &str) -> Option<PathBuf> {
+    if !matches!(backend.parse(), Ok(crate::role::Backend::Claude)) {
+        return None;
+    }
     let project = project_dir(projects_root, worktree_path)?;
     fs::read_dir(&project)
         .ok()?
@@ -53,7 +59,7 @@ pub fn read_transcript(
     let Some(projects_root) = claude_projects_dir(env) else {
         return Ok(None);
     };
-    let Some(path) = find_transcript(&projects_root, &dispatch.worktree) else {
+    let Some(path) = find_transcript(&projects_root, &dispatch.backend, &dispatch.worktree) else {
         return Ok(None);
     };
     let rows = render(&path, limit);
@@ -283,7 +289,7 @@ pub fn pulse_from(contents: &str) -> Option<Pulse> {
 
 pub fn pulse_for(env: &dyn Environment, dispatch: &DispatchRecord) -> Option<Pulse> {
     let projects_root = claude_projects_dir(env)?;
-    let path = find_transcript(&projects_root, &dispatch.worktree)?;
+    let path = find_transcript(&projects_root, &dispatch.backend, &dispatch.worktree)?;
     let contents = fs::read_to_string(path).ok()?;
     pulse_from(&contents)
 }
@@ -355,6 +361,18 @@ pub fn session(path: &Path) -> Session {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_codex_dispatch_does_not_take_the_transcript_of_a_claude_one_in_its_worktree() {
+        let root = tempfile::tempdir().unwrap();
+        let worktree = "/work/repo.oat-s3-worker";
+        let project = root.path().join(slug(worktree));
+        fs::create_dir_all(&project).unwrap();
+        fs::write(project.join("session.jsonl"), "").unwrap();
+
+        assert!(find_transcript(root.path(), "claude", worktree).is_some());
+        assert_eq!(find_transcript(root.path(), "codex", worktree), None);
+    }
 
     #[test]
     fn an_outstanding_tool_call_is_working_however_long_it_has_been_silent() {

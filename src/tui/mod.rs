@@ -154,7 +154,7 @@ impl SpendIndex {
         agent: &AgentRow,
     ) -> transcript::Session {
         let found = projects_root.zip(agent.worktree.as_deref()).and_then(|(root, worktree)| {
-            transcript::find_transcript(root, worktree)
+            transcript::find_transcript(root, agent.agent.as_deref().unwrap_or_default(), worktree)
         });
         match found {
             Some(path) => self.of_file(&path),
@@ -464,7 +464,8 @@ impl TuiState {
         let Some(worktree) = agent.worktree.clone() else {
             return;
         };
-        if let Some(path) = transcript::find_transcript(&root, &worktree) {
+        let backend = agent.agent.clone().unwrap_or_default();
+        if let Some(path) = transcript::find_transcript(&root, &backend, &worktree) {
             self.transcript = transcript::render(&path, 400);
             self.transcript_source = Some(path);
         }
