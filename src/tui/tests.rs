@@ -1,6 +1,7 @@
 use super::*;
 use crate::event_log::{LogEntry, now_iso};
 use crate::store::{DispatchRecord, RunRecord};
+use ratatui::style::Color;
 use ratatui::backend::TestBackend;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -279,6 +280,20 @@ fn screen(width: u16, height: u16, paint: impl FnOnce(&mut Frame)) -> String {
     out
 }
 
+/// The colour of the live pane's top-left corner.
+fn live_border(state: &mut TuiState) -> Option<Color> {
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal.draw(|frame| draw(frame, state)).unwrap();
+    let buffer = terminal.backend().buffer();
+    (0..buffer.area.height).find_map(|y| {
+        let row: String = (0..buffer.area.width).map(|x| buffer[(x, y)].symbol()).collect();
+        let title = row.find("· live")?;
+        let corner = row[..title].rfind('┌')?;
+        let x = row[..corner].chars().count() as u16;
+        Some(buffer[(x, y)].fg)
+    })
+}
+
 fn select(state: &mut TuiState, role: &str) {
     let index = state
         .agents()
@@ -443,6 +458,7 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     assert!(text.contains("running 3 tests"), "the screen shows while watching:\n{text}");
     assert!(text.contains("· live ─"), "{text}");
     assert!(text.contains("enter type"), "the keys are in the hints, not the title:\n{text}");
+    assert_eq!(live_border(&mut state), Some(Color::DarkGray), "the pane is grey until enter");
     state.fit_preview(&control);
 
     // Watching, keys stay with the view: j scrolls back rather than reaching the agent.
@@ -458,6 +474,7 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("live · typing"), "{text}");
     assert!(text.contains("ctrl+] stop typing"), "{text}");
+    assert_eq!(live_border(&mut state), Some(Color::Cyan), "typing lights the pane");
 
     state.on_key_with(key(KeyCode::Char('q')), &control);
     state.on_key_with(key(KeyCode::Enter), &control);

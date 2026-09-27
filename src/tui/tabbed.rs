@@ -69,7 +69,9 @@ fn title_of(state: &TuiState, what: &str) -> String {
 
 fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
     let plain_title = title_of(state, "live");
-    let block = pane(&plain_title, true);
+    // Grey while watching, lit only once enter has handed the agent the keys, so it is plain
+    // at a glance whether a key goes to the view or to the agent.
+    let block = pane(&plain_title, state.typing());
     let inner = block.inner(area);
     state.preview_area = Some((inner.width, inner.height));
     state.preview_origin = Some((inner.x, inner.y));
@@ -115,7 +117,7 @@ fn draw_preview(frame: &mut Frame, area: Rect, state: &mut TuiState) {
         .filter(|_| typing)
         .or(preview.select_cursor());
     let selection = preview.selection_range().zip(preview.offset());
-    let block = pane(&title, true).title_bottom(Line::from(bottom).right_aligned());
+    let block = pane(&title, typing).title_bottom(Line::from(bottom).right_aligned());
     frame.render_widget(Paragraph::new(lines).block(block), area);
     // What is selected reads reversed, cell by cell, the way a terminal
     // shows its own selection.
