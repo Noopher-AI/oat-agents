@@ -16,7 +16,9 @@ description: Read the whole fleet's state from the workflow log, the store, and 
 - `oat-agents log agents --run R` — one row per agent that has appeared in the Run's log.
 - `oat-agents big-plan show --run R` — the exact text the Run was fired with. When a Run's work
   looks wrong, check it against what was actually asked before concluding anything.
-- `oat-agents checklist show --run R` — the Run's checklist and which items are checked.
+- `oat-agents checklist show --run R` — the Run's checklist, which items are checked, and
+  under `progress` where the Dispatches linked to each item stand (`active`, `queued`,
+  `ended`, or `no_dispatch`).
 - `oat-agents dispatch show --dispatch D --run R` — the store's record of one Dispatch plus
   whether its session is still alive.
 - `oat-agents dispatch read --dispatch D --run R --source auto --limit 50` — the text on an

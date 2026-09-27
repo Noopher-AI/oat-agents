@@ -3,7 +3,7 @@
 //! Dispatch in the roster, one per log entry in the timeline. Only files an observer may
 //! always read are read here; nothing touches a session.
 
-use crate::checklist::ChecklistStore;
+use crate::checklist::{ChecklistStore, ItemProgress};
 use crate::event_log::{events, EventLog, LogEntry};
 use crate::role::CoreRole;
 use crate::store::{DispatchRecord, RunRecord, Settlement, Store};
@@ -182,7 +182,7 @@ pub struct RunSnapshot {
 impl RunSnapshot {
     pub fn read(store: &Store, log: &EventLog, run_id: &str) -> Result<Self> {
         let run = store.load_run(run_id)?;
-        let dispatches = load_dispatches(store, run_id);
+        let dispatches = store.list_dispatches(run_id);
         let hashes: HashMap<String, String> = dispatches
             .iter()
             .map(|dispatch| (dispatch.id.clone(), dispatch_hash(&run, dispatch)))
@@ -242,23 +242,6 @@ pub fn run_summaries(store: &Store, log: &EventLog) -> Vec<RunSummary> {
         .filter_map(|run_id| RunSnapshot::read(store, log, run_id).ok())
         .map(|snapshot| snapshot.summary())
         .collect()
-}
-
-fn load_dispatches(store: &Store, run_id: &str) -> Vec<DispatchRecord> {
-    let dir = store.root().join(run_id).join("dispatches");
-    let Ok(read) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-    let mut dispatches: Vec<DispatchRecord> = read
-        .filter_map(|entry| entry.ok())
-        .filter_map(|entry| {
-            store
-                .load_dispatch(run_id, &entry.file_name().to_string_lossy())
-                .ok()
-        })
-        .collect();
-    dispatches.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
-    dispatches
 }
 
 /// The Dispatch's hash_id, derived the way the launch derived it: the coordinator's under
@@ -370,15 +353,34 @@ pub fn run_exec(events: &[Value]) -> String {
         .unwrap_or_default()
 }
 
-/// The open Run's checklist, as the overlay shows it.
-pub fn checklist_items(store: Option<&ChecklistStore>, run_id: &str) -> Option<Vec<(bool, String)>> {
-    let checklist = store?.load(run_id).ok()?;
+/// One line of the checklist overlay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChecklistRow {
+    pub done: bool,
+    pub text: String,
+    /// Where the work behind a linked item stands; `None` for an unlinked item.
+    pub progress: Option<ItemProgress>,
+}
+
+/// The open Run's checklist, as the overlay shows it. Without the Run store, linked items
+/// show no progress.
+pub fn checklist_items(
+    checklists: Option<&ChecklistStore>,
+    store: Option<&Store>,
+    run_id: &str,
+) -> Option<Vec<ChecklistRow>> {
+    let checklist = checklists?.load(run_id).ok()?;
+    let progress = match store {
+        Some(store) => crate::checklist::progress(store, run_id, &checklist),
+        None => Vec::new(),
+    };
     Some(
         checklist
             .items
             .into_iter()
             .zip(checklist.checked.into_iter().chain(std::iter::repeat(false)))
-            .map(|(item, done)| (done, item))
+            .zip(progress.into_iter().chain(std::iter::repeat(None)))
+            .map(|((text, done), progress)| ChecklistRow { done, text, progress })
             .collect(),
     )
 }

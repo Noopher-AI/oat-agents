@@ -36,7 +36,11 @@ When you need the operator's judgment and no reply is coming from inside the Run
 with `log record --event needs-human`, stating your own question in that call, and retire it
 with `log record --event answered` once you have the operator's answer.
 
-Keep the Run's checklist current with `checklist update` as the state of the work changes.
+Keep the Run's checklist current with `checklist update`. When you set its items, link each
+one to the `--name` of the work it tracks with `--link N=<name>`: every Dispatch named that,
+or that name followed by `-` and more (`s3-f8`, `s3-f8-fix1`, `s3-f8-review`), then shows its
+progress beside the item in the live view without further calls. Check an item off with
+`--check N` in the same step as the `log record` that accepts its work, not later.
 
 Finish the Run with `meta finish` once every Dispatch is settled and released. It closes the
 Run, prints its receipt, and schedules its own cleanup.

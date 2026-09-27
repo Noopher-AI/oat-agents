@@ -397,3 +397,55 @@ fn a_run_goes_from_delegation_to_finish() {
     let closed_at = events.iter().position(|e| e == "run_closed").unwrap();
     assert!(created_at < closed_at, "run_created precedes run_closed");
 }
+
+#[test]
+fn a_linked_checklist_item_shows_the_work_fired_under_its_name() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
+    let env = world.env();
+    let catalog = fixture_catalog();
+
+    let fire = parse(&[
+        "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(),
+        "--name", "run-list", "--agent", "claude",
+    ]);
+    run_json(fire, &env, &catalog);
+    let env_with_run = world.env().with_var("OAT_RUN_ID", "run-list");
+
+    let update = parse(&[
+        "checklist", "update", "--items", "glaze pots", "--items", "fire kiln", "--items", "sweep",
+        "--link", "1=glaze", "--link", "2=kiln",
+    ]);
+    let result = run_json(update, &env_with_run, &catalog);
+    assert_eq!(result["checklist"]["links"], serde_json::json!(["glaze", "kiln", null]));
+
+    // `glaze-fix1` belongs to `glaze`; `glazer` does not.
+    for name in ["glaze-fix1", "glazer"] {
+        let role_fire = parse(&["role", "fire", "worker", "--name", name, "--prompt", "do work"]);
+        run_json(role_fire, &env_with_run, &catalog);
+    }
+
+    let show = run_json(parse(&["checklist", "show"]), &env_with_run, &catalog);
+    let progress = &show["progress"];
+    assert_eq!(progress[0]["state"], "active");
+    assert_eq!(progress[0]["name"], "glaze-fix1");
+    assert_eq!(progress[0]["dispatches"], 1);
+    assert_eq!(progress[1]["state"], "no_dispatch");
+    assert!(progress[2].is_null(), "an unlinked item has no progress: {show}");
+}
+
+#[test]
+fn a_malformed_link_changes_nothing() {
+    let world = TestWorld::new();
+    let env = world.env().with_var("OAT_RUN_ID", "run-list");
+    let catalog = fixture_catalog();
+
+    run_json(parse(&["checklist", "update", "--items", "glaze pots"]), &env, &catalog);
+    let bad = parse(&["checklist", "update", "--items", "other", "--link", "glaze"]);
+    let failure = to_failure(&execute(bad, &env, &catalog).unwrap_err());
+    assert_eq!(failure.code, codes::INVALID_INPUT);
+
+    let show = run_json(parse(&["checklist", "show"]), &env, &catalog);
+    assert_eq!(show["checklist"]["items"], serde_json::json!(["glaze pots"]));
+}

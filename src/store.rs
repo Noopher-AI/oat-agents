@@ -255,6 +255,24 @@ impl Store {
         Ok(serde_json::from_str(&content)?)
     }
 
+    /// Every Dispatch recorded for a Run, oldest first. A record that cannot be read is
+    /// skipped: readers of a live Run see what is there, not an error.
+    pub fn list_dispatches(&self, run_id: &str) -> Vec<DispatchRecord> {
+        let dir = self.root.join(run_id).join("dispatches");
+        let Ok(read) = fs::read_dir(&dir) else {
+            return Vec::new();
+        };
+        let mut dispatches: Vec<DispatchRecord> = read
+            .filter_map(|entry| entry.ok())
+            .filter_map(|entry| {
+                self.load_dispatch(run_id, &entry.file_name().to_string_lossy())
+                    .ok()
+            })
+            .collect();
+        dispatches.sort_by(|a, b| a.created_at.cmp(&b.created_at).then_with(|| a.id.cmp(&b.id)));
+        dispatches
+    }
+
     pub fn dispatch_dir_path(&self, run_id: &str, dispatch_id: &str) -> PathBuf {
         self.dispatch_dir(run_id, dispatch_id)
     }

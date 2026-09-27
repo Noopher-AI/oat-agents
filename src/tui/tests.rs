@@ -613,11 +613,50 @@ fn the_checklist_panel_shows_the_runs_items_and_how_many_are_done() {
     let fx = fixture();
     let mut panel = ChecklistPanel::new();
     panel.open_for(OPEN_RUN.to_string());
-    panel.refresh(Some(&fx.checklist));
+    panel.refresh(Some(&fx.checklist), Some(&fx.store));
     let text = screen(100, 30, |frame| checklist_panel::draw(frame, &panel));
     assert!(text.contains("checklist · 1/2"), "{text}");
     assert!(text.contains("[x] 1. glaze pots"), "{text}");
     assert!(text.contains("[ ] 2. fire kiln"), "{text}");
+}
+
+#[test]
+fn a_linked_checklist_item_shows_its_work_and_flags_work_finished_but_unchecked() {
+    let fx = fixture();
+    let dispatch = |id: &str, name: &str, settled: Option<crate::store::Settlement>, released: bool| DispatchRecord {
+        id: id.to_string(),
+        run_id: OPEN_RUN.to_string(),
+        role: "worker".to_string(),
+        backend: "claude".to_string(),
+        worktree: String::new(),
+        branch: String::new(),
+        created_at: format!("2026-09-26T02:00:0{}.000000000Z", id.len()),
+        env_id: None,
+        image_id: None,
+        env_skipped: None,
+        settled,
+        report: None,
+        released_at: released.then(now_iso),
+        name: Some(name.to_string()),
+    };
+    fx.store
+        .create_dispatch(&dispatch("dispatch-g", "glaze", Some(crate::store::Settlement::Succeeded), true))
+        .unwrap();
+    fx.store.create_dispatch(&dispatch("dispatch-k1", "kiln-fix1", None, false)).unwrap();
+    fx.checklist
+        .replace_items(OPEN_RUN, vec!["glaze pots".into(), "fire kiln".into(), "sweep".into()])
+        .unwrap();
+    fx.checklist.set_link(OPEN_RUN, 1, Some("glaze".into())).unwrap();
+    fx.checklist.set_link(OPEN_RUN, 2, Some("kiln".into())).unwrap();
+
+    let mut panel = ChecklistPanel::new();
+    panel.open_for(OPEN_RUN.to_string());
+    panel.refresh(Some(&fx.checklist), Some(&fx.store));
+    let text = screen(120, 30, |frame| checklist_panel::draw(frame, &panel));
+    assert!(text.contains("[ ] 1. glaze pots ? · worker glaze succeeded, released"), "{text}");
+    assert!(text.contains("[ ] 2. fire kiln · worker kiln-fix1 active"), "{text}");
+    assert!(text.contains("[ ] 3. sweep "), "{text}");
+    assert!(!text.contains("3. sweep ·"), "an unlinked item shows no progress:\n{text}");
 }
 
 #[test]

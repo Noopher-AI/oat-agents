@@ -1911,7 +1911,7 @@ fn event_loop(
                         checklist_panel.close();
                     } else if let Some(state) = open.as_ref() {
                         checklist_panel.open_for(state.run_id.clone());
-                        checklist_panel.refresh(checklist_store);
+                        checklist_panel.refresh(checklist_store, Some(store));
                     }
                 }
                 Event::Key(key) if checklist_panel.is_open() => {
@@ -2025,7 +2025,7 @@ fn event_loop(
         if polled.elapsed() >= POLL_INTERVAL {
             polled = Instant::now();
             if checklist_panel.is_open() {
-                checklist_panel.refresh(checklist_store);
+                checklist_panel.refresh(checklist_store, Some(store));
             }
             match open.as_mut() {
                 Some(state) => {
