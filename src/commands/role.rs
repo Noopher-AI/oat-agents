@@ -347,6 +347,7 @@ fn launch(
         instructions,
         task,
         skills,
+        mcp_servers: role_def.mcp_servers.clone(),
         model: model.clone(),
         role_names_for_preamble: catalog.role_names(),
         created_fresh_worktree: created_fresh,

@@ -7,10 +7,10 @@
 
 use super::format::{
     is_executable, list_files_recursive, list_subdirectories, parse_toml, CoreRoleToml, ModelToml,
-    PluginManifest, RoleToml, StartLocationToml, SUPPORTED_FORMAT_VERSION,
+    McpServerToml, PluginManifest, RoleToml, StartLocationToml, SUPPORTED_FORMAT_VERSION,
 };
 use super::PluginError;
-use crate::role::{Backend, CoreRole, ModelSetting, SkillFile, SkillRef, StartLocation};
+use crate::role::{Backend, CoreRole, McpServer, ModelSetting, SkillFile, SkillRef, StartLocation};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,6 +25,7 @@ pub struct LoadedRole {
     pub prior_verification: bool,
     pub max_concurrent: Option<u32>,
     pub skills: Vec<SkillRef>,
+    pub mcp_servers: Vec<McpServer>,
     pub models: BTreeMap<Backend, ModelSetting>,
 }
 
@@ -32,6 +33,7 @@ pub struct LoadedRole {
 pub struct LoadedCoreRole {
     pub instructions: String,
     pub skills: Vec<SkillRef>,
+    pub mcp_servers: Vec<McpServer>,
     pub models: BTreeMap<Backend, ModelSetting>,
     pub backend: Option<Backend>,
 }
@@ -40,6 +42,7 @@ pub struct LoadedCoreRole {
 pub struct LoadedPlugin {
     pub name: String,
     pub dir: PathBuf,
+    pub mcp_servers: BTreeMap<String, McpServer>,
     pub roles: BTreeMap<String, LoadedRole>,
     pub meta: Option<LoadedCoreRole>,
     pub console: Option<LoadedCoreRole>,
@@ -61,12 +64,13 @@ pub fn load_plugin(dir: &Path) -> Result<LoadedPlugin, Vec<PluginError>> {
     let mut errors = Vec::new();
 
     let manifest = load_manifest(dir, &mut errors);
+    let mcp_servers = convert_mcp_servers(manifest.as_ref());
     let skills = load_all_skills(dir, &mut errors);
-    let roles = load_all_roles(dir, &skills, &mut errors);
+    let roles = load_all_roles(dir, &skills, &mcp_servers, &mut errors);
     check_core_dir(dir, &mut errors);
     let mut core = BTreeMap::new();
     for (slug, _) in CORE_ROLES {
-        if let Some(loaded) = load_core_role(dir, slug, &skills, &mut errors) {
+        if let Some(loaded) = load_core_role(dir, slug, &skills, &mcp_servers, &mut errors) {
             core.insert(*slug, loaded);
         }
     }
@@ -79,6 +83,7 @@ pub fn load_plugin(dir: &Path) -> Result<LoadedPlugin, Vec<PluginError>> {
     Ok(LoadedPlugin {
         name: manifest.name,
         dir: dir.to_path_buf(),
+        mcp_servers,
         roles,
         meta: core.remove("oat-meta"),
         console: core.remove("oat-console"),
@@ -140,6 +145,16 @@ fn load_manifest(dir: &Path, errors: &mut Vec<PluginError>) -> Option<PluginMani
             if manifest.name.trim().is_empty() {
                 errors.push(PluginError::new(dir, "oat-plugin.toml", "name must not be empty"));
                 return None;
+            }
+            for (name, server) in &manifest.mcp_servers {
+                if !valid_mcp_server_name(name) {
+                    errors.push(PluginError::new(
+                        dir,
+                        "oat-plugin.toml",
+                        format!("MCP server name '{name}' must contain only ASCII letters, digits, hyphens or underscores"),
+                    ));
+                }
+                validate_mcp_server(dir, name, server, errors);
             }
             Some(manifest)
         }
@@ -223,6 +238,7 @@ fn load_skill(dir: &Path, name: &str, path: &Path, errors: &mut Vec<PluginError>
 fn load_all_roles(
     dir: &Path,
     skills: &BTreeMap<String, SkillRef>,
+    mcp_servers: &BTreeMap<String, McpServer>,
     errors: &mut Vec<PluginError>,
 ) -> BTreeMap<String, LoadedRole> {
     let mut out = BTreeMap::new();
@@ -236,7 +252,7 @@ fn load_all_roles(
         }
     };
     for (name, path) in entries {
-        if let Some(role) = load_role(dir, &name, &path, skills, errors) {
+        if let Some(role) = load_role(dir, &name, &path, skills, mcp_servers, errors) {
             out.insert(name, role);
         }
     }
@@ -248,6 +264,7 @@ fn load_role(
     name: &str,
     path: &Path,
     skills: &BTreeMap<String, SkillRef>,
+    mcp_servers: &BTreeMap<String, McpServer>,
     errors: &mut Vec<PluginError>,
 ) -> Option<LoadedRole> {
     let toml_file = format!("roles/{name}/role.toml");
@@ -287,6 +304,7 @@ fn load_role(
     }
 
     let resolved_skills = resolve_skills(dir, &toml_file, &role_toml.skills, skills, errors);
+    let resolved_mcp_servers = resolve_mcp_servers(dir, &toml_file, &role_toml.mcp_servers, mcp_servers, errors);
     let models = convert_models(dir, &toml_file, role_toml.model, errors);
 
     Some(LoadedRole {
@@ -300,6 +318,7 @@ fn load_role(
         prior_verification: role_toml.prior_verification,
         max_concurrent: role_toml.max_concurrent,
         skills: resolved_skills,
+        mcp_servers: resolved_mcp_servers,
         models,
     })
 }
@@ -308,6 +327,7 @@ fn load_core_role(
     dir: &Path,
     slug: &str,
     skills: &BTreeMap<String, SkillRef>,
+    mcp_servers: &BTreeMap<String, McpServer>,
     errors: &mut Vec<PluginError>,
 ) -> Option<LoadedCoreRole> {
     let instruction_file = format!("core/{slug}-instruction.md");
@@ -362,6 +382,7 @@ fn load_core_role(
     };
 
     let resolved_skills = resolve_skills(dir, &toml_file, &core_toml.skills, skills, errors);
+    let resolved_mcp_servers = resolve_mcp_servers(dir, &toml_file, &core_toml.mcp_servers, mcp_servers, errors);
     let models = convert_models(dir, &toml_file, core_toml.model, errors);
     let backend = match core_toml.backend.as_deref() {
         None => None,
@@ -392,9 +413,101 @@ fn load_core_role(
     Some(LoadedCoreRole {
         instructions,
         skills: resolved_skills,
+        mcp_servers: resolved_mcp_servers,
         models,
         backend,
     })
+}
+
+fn valid_mcp_server_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+fn validate_mcp_server(dir: &Path, name: &str, server: &McpServerToml, errors: &mut Vec<PluginError>) {
+    if server.command.trim().is_empty() || server.command.contains('\0') {
+        errors.push(PluginError::new(
+            dir,
+            "oat-plugin.toml",
+            format!("MCP server '{name}' command must be non-empty and contain no NUL byte"),
+        ));
+    }
+    if server.args.iter().any(|arg| arg.contains('\0')) {
+        errors.push(PluginError::new(
+            dir,
+            "oat-plugin.toml",
+            format!("MCP server '{name}' args must not contain NUL bytes"),
+        ));
+    }
+    for key in server.env.keys() {
+        let mut chars = key.chars();
+        let valid_first = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+        let valid_rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_first || !valid_rest {
+            errors.push(PluginError::new(
+                dir,
+                "oat-plugin.toml",
+                format!("MCP server '{name}' env key '{key}' is not a valid environment variable name"),
+            ));
+        }
+    }
+    if server.env.values().any(|value| value.contains('\0')) {
+        errors.push(PluginError::new(
+            dir,
+            "oat-plugin.toml",
+            format!("MCP server '{name}' env values must not contain NUL bytes"),
+        ));
+    }
+}
+
+fn convert_mcp_servers(manifest: Option<&PluginManifest>) -> BTreeMap<String, McpServer> {
+    manifest
+        .into_iter()
+        .flat_map(|manifest| manifest.mcp_servers.iter())
+        .map(|(name, server)| {
+            (
+                name.clone(),
+                McpServer {
+                    name: name.clone(),
+                    command: server.command.clone(),
+                    args: server.args.clone(),
+                    env: server.env.clone(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn resolve_mcp_servers(
+    dir: &Path,
+    file: &str,
+    names: &[String],
+    servers: &BTreeMap<String, McpServer>,
+    errors: &mut Vec<PluginError>,
+) -> Vec<McpServer> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for name in names {
+        if !seen.insert(name) {
+            errors.push(PluginError::new(
+                dir,
+                file,
+                format!("binds MCP server '{name}' more than once"),
+            ));
+            continue;
+        }
+        match servers.get(name) {
+            Some(server) => out.push(server.clone()),
+            None => errors.push(PluginError::new(
+                dir,
+                file,
+                format!("declares MCP server '{name}', which has no matching [mcp_servers.{name}] entry in oat-plugin.toml"),
+            )),
+        }
+    }
+    out
 }
 
 fn resolve_skills(

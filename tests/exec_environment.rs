@@ -103,6 +103,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
             instructions: "Write the pottery this task asks for.".to_string(),
             models: BTreeMap::new(),
             skills: Vec::new(),
+            mcp_servers: Vec::new(),
             start: StartLocation::Fresh,
             exec_environment,
             prior_verification,
@@ -114,6 +115,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 backend: None,
             },
         )
@@ -123,6 +125,7 @@ fn catalog_with(exec_environment: bool, prior_verification: bool) -> oat_agents:
                 instructions: "Observe the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 backend: None,
             },
         )

@@ -4,7 +4,9 @@
 use crate::environment::Environment;
 use crate::error::{codes, err};
 use crate::event_log::now_iso;
+use crate::plugin;
 use crate::plugins::{self, PluginPin};
+use crate::role::{CoreRole, RoleCatalog};
 use crate::trust::{TrustKey, TrustStore};
 use anyhow::Result;
 use clap::{Args, Subcommand};
@@ -20,6 +22,8 @@ pub enum PluginCommand {
     },
     /// Lists the plugins a repository is pinned to and whether each is trusted here.
     List(ListArgs),
+    /// Validates one plugin directory without trusting it or launching any MCP server.
+    Validate(ValidateArgs),
 }
 
 #[derive(Subcommand, Debug)]
@@ -60,11 +64,58 @@ pub struct ListArgs {
     pub repo: PathBuf,
 }
 
+#[derive(Args, Debug)]
+pub struct ValidateArgs {
+    /// The plugin directory to parse and validate.
+    #[arg(long)]
+    pub path: PathBuf,
+}
+
 pub fn run(command: PluginCommand, env: &dyn Environment) -> Result<Value> {
     match command {
         PluginCommand::Trust { source } => trust(source, env),
         PluginCommand::List(args) => list(args, env),
+        PluginCommand::Validate(args) => validate(args),
     }
+}
+
+fn validate(args: ValidateArgs) -> Result<Value> {
+    let path = args.path.canonicalize().map_err(|e| {
+        err(
+            crate::error::codes::INVALID_INPUT,
+            format!("invalid plugin --path: {e}"),
+        )
+    })?;
+    let (catalog, plugins) = plugin::load_catalog(std::slice::from_ref(&path))
+        .map_err(|errors| plugin::errors_to_cli_failure(&errors))?;
+    let roles = catalog
+        .role_names()
+        .into_iter()
+        .map(|name| {
+            let role = catalog.role(&name).expect("role name came from catalog");
+            json!({
+                "name": name,
+                "mcp_servers": role.mcp_servers.iter().map(|server| server.name.clone()).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let core_roles = [CoreRole::Meta, CoreRole::Console]
+        .into_iter()
+        .map(|kind| {
+            let role = catalog.core_role(kind).expect("valid plugins supply both core roles");
+            json!({
+                "name": kind.name(),
+                "mcp_servers": role.mcp_servers.iter().map(|server| server.name.clone()).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({
+        "valid": true,
+        "plugins": plugins.iter().map(|plugin| json!({"name": plugin.name})).collect::<Vec<_>>(),
+        "mcp_servers": catalog.mcp_server_names(),
+        "roles": roles,
+        "core_roles": core_roles,
+    }))
 }
 
 fn trust(source: TrustSource, env: &dyn Environment) -> Result<Value> {

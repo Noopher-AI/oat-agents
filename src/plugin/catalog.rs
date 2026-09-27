@@ -8,7 +8,7 @@
 use super::load::{LoadedCoreRole, LoadedPlugin};
 use super::PluginError;
 use crate::role::{
-    Backend, CoreRole, CoreRoleDefinition, RoleCatalog, RoleDefinition, SkillRef,
+    Backend, CoreRole, CoreRoleDefinition, McpServer, RoleCatalog, RoleDefinition, SkillRef,
 };
 use anyhow::Result;
 use std::collections::BTreeMap;
@@ -17,6 +17,13 @@ use std::collections::BTreeMap;
 pub struct PluginCatalog {
     roles: BTreeMap<String, RoleDefinition>,
     core_roles: BTreeMap<CoreRole, CoreRoleDefinition>,
+    mcp_servers: BTreeMap<String, McpServer>,
+}
+
+impl PluginCatalog {
+    pub fn mcp_server_names(&self) -> Vec<String> {
+        self.mcp_servers.keys().cloned().collect()
+    }
 }
 
 impl RoleCatalog for PluginCatalog {
@@ -46,8 +53,23 @@ pub fn build_catalog(plugins: &[LoadedPlugin]) -> Result<PluginCatalog, Vec<Plug
     let mut errors = Vec::new();
     let mut roles = BTreeMap::new();
     let mut owner: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut mcp_owner: BTreeMap<&str, &str> = BTreeMap::new();
+    let mut mcp_servers = BTreeMap::new();
 
     for plugin in plugins {
+        for server_name in plugin.mcp_servers.keys() {
+            if let Some(existing_plugin) = mcp_owner.get(server_name.as_str()) {
+                errors.push(PluginError::combination(format!(
+                    "MCP server '{server_name}' is defined by both plugin '{existing_plugin}' and plugin '{}'",
+                    plugin.name
+                )));
+            } else {
+                mcp_owner.insert(server_name.as_str(), plugin.name.as_str());
+                if let Some(server) = plugin.mcp_servers.get(server_name) {
+                    mcp_servers.insert(server_name.clone(), server.clone());
+                }
+            }
+        }
         for (role_name, role) in &plugin.roles {
             if let Some(existing_plugin) = owner.get(role_name.as_str()) {
                 errors.push(PluginError::combination(format!(
@@ -64,6 +86,7 @@ pub fn build_catalog(plugins: &[LoadedPlugin]) -> Result<PluginCatalog, Vec<Plug
                     instructions: role.instructions.clone(),
                     models: role.models.clone(),
                     skills: role.skills.clone(),
+                    mcp_servers: role.mcp_servers.clone(),
                     start: role.start,
                     exec_environment: role.exec_environment,
                     prior_verification: role.prior_verification,
@@ -94,7 +117,11 @@ pub fn build_catalog(plugins: &[LoadedPlugin]) -> Result<PluginCatalog, Vec<Plug
     core_roles.insert(CoreRole::Meta, meta.expect("no errors implies present"));
     core_roles.insert(CoreRole::Console, console.expect("no errors implies present"));
 
-    Ok(PluginCatalog { roles, core_roles })
+    Ok(PluginCatalog {
+        roles,
+        core_roles,
+        mcp_servers,
+    })
 }
 
 fn combine_core_role<'a>(
@@ -120,6 +147,7 @@ fn combine_core_role<'a>(
         .join("\n\n");
 
     let mut skills: Vec<SkillRef> = Vec::new();
+    let mut mcp_servers = Vec::new();
     let mut skill_owner: BTreeMap<&str, &str> = BTreeMap::new();
     for (plugin, core) in &contributions {
         for skill in &core.skills {
@@ -133,6 +161,7 @@ fn combine_core_role<'a>(
             skill_owner.insert(skill.name.as_str(), plugin.name.as_str());
             skills.push(skill.clone());
         }
+        mcp_servers.extend(core.mcp_servers.iter().cloned());
     }
 
     let mut models = BTreeMap::new();
@@ -172,6 +201,7 @@ fn combine_core_role<'a>(
         instructions,
         models,
         skills,
+        mcp_servers,
         backend,
     })
 }

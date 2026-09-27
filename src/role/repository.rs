@@ -172,6 +172,7 @@ mod tests {
                 instructions: "Throw the pots.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 start: StartLocation::Fresh,
                 exec_environment: false,
                 prior_verification: false,
