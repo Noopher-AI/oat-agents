@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CODE_OF_CONDUCT.md`, issue and pull request templates, `CODEOWNERS`, and Dependabot
   configuration. CI now also runs on pull requests.
 
+### Fixed
+
+- `cargo clippy` on the current stable toolchain passes again, so CI on `main` is green.
+
 ## [0.1.0]
 
 ### Added
