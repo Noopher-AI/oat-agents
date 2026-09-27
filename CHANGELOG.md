@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CODE_OF_CONDUCT.md`, issue and pull request templates, `CODEOWNERS`, and Dependabot
   configuration. CI now also runs on pull requests.
 - An SPDX license header naming the oat-agents contributors on every source file, checked in CI.
+- The example plugin's team works a change through to the coordinator's branch: `oat-meta` skips
+  the planner when the Big Plan is already concrete, fires independent pieces together, reviews
+  from the worker's worktree, merges a passed branch into its own worktree, hands a correction
+  the failed branch and the reviewer's findings, and raises `needs-human` after two failed
+  corrections. The planner marks each step's check and dependencies, the reviewer leaves the
+  worker's worktree untouched and lists each problem with its file and line, and the console
+  names why a stuck Run is stuck.
+
+### Changed
+
+- The example plugin's `branch-naming` skill is replaced by `committing`. Its rule had a worker
+  switch to a `<role>/<slug>` branch, leaving the Dispatch's own branch — the one the
+  coordinator merges and cleanup checks — without the work.
 
 ### Fixed
 

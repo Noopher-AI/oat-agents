@@ -46,13 +46,13 @@ fn the_example_plugin_loads_with_no_errors_through_the_external_plugin_path() {
     assert_eq!(worker.start, StartLocation::Fresh);
     assert!(worker.exec_environment, "worker gets an execution environment");
     assert_eq!(worker.skills.len(), 1);
-    assert_eq!(worker.skills[0].name, "branch-naming");
+    assert_eq!(worker.skills[0].name, "committing");
 
     let reviewer = catalog.role("reviewer").unwrap();
     assert_eq!(reviewer.start, StartLocation::Existing);
     assert!(reviewer.exec_environment, "reviewer gets an execution environment");
     assert!(reviewer.prior_verification, "reviewer gets prior verification");
-    assert!(reviewer.skills.is_empty(), "the branch-naming skill lands with no other role");
+    assert!(reviewer.skills.is_empty(), "the committing skill lands with no other role");
 
     // No role pins a model: each backend falls back to its own default.
     assert!(!planner.models.contains_key(&Backend::Claude));

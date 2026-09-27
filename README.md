@@ -71,7 +71,7 @@ something here is wrong, please open an issue.</sub>
 ## Small core, everything else is a plugin
 
 <p align="center">
-  <img src="docs/assets/architecture.svg" alt="Left: the core, one binary, owns launching, worktrees, tmux sessions, the Run inbox, the workflow log, pods and the live view, plus exactly two core roles, oat-meta and oat-console. Right: a plugin is a directory; the example team is 57 lines of Markdown and TOML, and a new role is a new directory." width="100%">
+  <img src="docs/assets/architecture.svg" alt="Left: the core, one binary, owns launching, worktrees, tmux sessions, the Run inbox, the workflow log, pods and the live view, plus exactly two core roles, oat-meta and oat-console. Right: a plugin is a directory; the example team is 89 lines of Markdown and TOML, and a new role is a new directory." width="100%">
 </p>
 
 The core owns the **mechanism** and none of the **practice** (ADR-0001, ADR-0004):
