@@ -153,6 +153,15 @@ impl PluginBuilder {
         self
     }
 
+    /// Appends `lines` to an already-written role's `role.toml`.
+    pub fn role_toml(self, role: &str, lines: &str) -> Self {
+        let path = self.dir.join("roles").join(role).join("role.toml");
+        let mut contents = std::fs::read_to_string(&path).unwrap();
+        contents.push_str(lines);
+        std::fs::write(path, contents).unwrap();
+        self
+    }
+
     pub fn core(self, slug: &str, instructions: &str) -> Self {
         self.core_with(slug, instructions, &[])
     }

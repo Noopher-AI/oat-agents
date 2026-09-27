@@ -239,9 +239,14 @@ fn launch(
     check_request(request, catalog, run_record)?;
     let run_id = run_record.id.clone();
     let repo = PathBuf::from(&run_record.repo);
-    let agent = request.agent.clone().unwrap_or_else(|| run_record.backend.clone());
-    let backend = Backend::from_str(&agent)?;
     let role_def = catalog.role(&request.role)?;
+    let settings = run_record.role_settings.get(&request.role).cloned().unwrap_or_default();
+    // `--agent` for this one launch, then the repository's choice for the role, then the Run's.
+    let backend = match (&request.agent, settings.backend) {
+        (Some(agent), _) => Backend::from_str(agent)?,
+        (None, Some(backend)) => backend,
+        (None, None) => Backend::from_str(&run_record.backend)?,
+    };
     let task = request.task.clone();
 
     let launch_name = request.name.clone().unwrap_or_else(|| generate_id(&request.role));
@@ -276,7 +281,7 @@ fn launch(
         }
     }
 
-    let model = role_def.models.get(&backend).cloned().unwrap_or_default();
+    let model = settings.model_for(backend, &role_def.models);
 
     let log = EventLog::open(env);
     let mut skills = role_def.skills.clone();
@@ -349,6 +354,7 @@ fn launch(
         "run_id": run_id,
         "dispatch_id": dispatch.id,
         "role": request.role,
+        "backend": dispatch.backend,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),

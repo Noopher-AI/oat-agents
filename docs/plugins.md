@@ -86,29 +86,52 @@ reasoning_effort = "high"
   role may load. A name with no matching `skills/<name>/` directory is refused.
 - `[model.claude]` / `[model.codex]` — optional per-backend `model` and `reasoning_effort`.
   Leaving a backend out means that role uses the backend's own default when launched there.
+  These are the plugin's defaults; a repository replaces them in `.oat/roles.toml` (see below).
 
 `roles/<role>/instructions.md` is plain Markdown: the role's own working instructions, placed
 in the prompt after the core role protocol and before the task. It may reference one of the
 role's declared skills as `$skill-name` (see below).
 
-## Limiting a role in a repository: `.oat/roles.toml`
+## A repository's own role settings: `.oat/roles.toml`
 
-A repository sets its own limit on any plugin role, replacing the plugin's `max_concurrent`:
+A repository can replace, for any plugin role, the plugin's `max_concurrent`, and, for any role
+including `oat-meta` and `oat-console`, the backend it runs on and its per-backend model:
 
 ```toml
 [worker]
 max_concurrent = 2
+backend = "codex"
+
+[worker.model.codex]
+model = "gpt-5.5"
+reasoning_effort = "high"
 
 [reviewer]
 max_concurrent = 1
+
+[oat-meta.model.claude]
+model = "opus"
+
+[oat-console]
+backend = "claude"
 ```
 
-`meta fire` settles each role's limit once — the repository's value where it names the role,
-the plugin's otherwise — and records it in the Run, so a change to either file affects the next
-Run, never one already running. A table naming a role no plugin of the Run supplies, a core
-role, an unknown field, or a limit of `0` refuses the Run with `role_limits_invalid` before
-anything is created. A repository cannot lift a plugin's limit to "none"; it can only set a
-number.
+- `max_concurrent` — replaces the plugin's limit for that role. Core roles take none.
+- `backend` — `"claude"` or `"codex"`. A plugin role's backend is, in order: `role fire
+  --agent`, this, the Run's. The Run's is `meta fire --agent`, then this under `[oat-meta]`,
+  then Claude Code. The console's is this under `[oat-console]`, then its plugins'
+  `core/oat-console.toml`; `console open --agent` is used only when neither chooses one and is
+  refused when it contradicts them.
+- `[<role>.model.<backend>]` — `model` and `reasoning_effort` for launches of that role on that
+  backend. Each one set replaces the plugin's; one left out keeps the plugin's.
+
+`meta fire` settles all of it once — the repository's value where it names one, the plugin's
+otherwise — and records it in the Run (`role_limits` and `role_settings` in its output), so a
+change to either file affects the next Run, never one already running. The console reads the
+file each time it is opened. A table naming a role no plugin of the Run supplies, an unknown
+field, a limit of `0` or a limit on a core role refuses the Run with `role_limits_invalid`, and
+an unknown backend with `role_settings_invalid`, before anything is created. A repository cannot
+lift a plugin's limit to "none"; it can only set a number.
 
 A `role fire` over the limit answers `"queued": true` with the Dispatch's id. The coordinator's
 own `run wait`, `dispatch release` and `role fire` start queued launches, oldest first, as
@@ -164,8 +187,9 @@ backend = "codex"   # or "claude"
 A console is opened from no command that could choose one, so the repository's plugins do. When
 none chooses, `oat-agents console open --agent <backend>` picks it, and with no `--agent`
 either it is Claude Code; asking for a backend the plugins did not choose is refused rather than
-silently obeyed or ignored. `core/oat-meta.toml` may not set `backend`: `oat-meta` runs on the
-Run's backend, chosen by `meta fire --agent`. Two plugins choosing the console's backend is a
+silently obeyed or ignored. A repository's `.oat/roles.toml` chooses over its plugins (see
+above). `core/oat-meta.toml` may not set `backend`: `oat-meta` runs on the Run's backend, chosen
+by `meta fire --agent` or the repository. Two plugins choosing the console's backend is a
 conflict like any other.
 
 ## Validation

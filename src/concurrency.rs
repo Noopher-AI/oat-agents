@@ -10,6 +10,7 @@
 //! in order, by the next coordinator command that finds one free.
 
 use crate::error::{codes, err};
+use crate::role::repository::RepoRoles;
 use crate::role::RoleCatalog;
 use crate::store::Store;
 use anyhow::Result;
@@ -19,51 +20,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-pub const REPO_CONFIG: &str = ".oat/roles.toml";
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RoleOverride {
-    max_concurrent: u32,
-}
-
 /// Every role's effective limit for a Run: the plugin's default, replaced by the repository's
 /// `.oat/roles.toml` where it names the role. A role missing from the result has no limit.
-pub fn resolve_limits(repo: &Path, catalog: &dyn RoleCatalog) -> Result<BTreeMap<String, u32>> {
+pub fn resolve_limits(repo: &RepoRoles, catalog: &dyn RoleCatalog) -> Result<BTreeMap<String, u32>> {
     let mut limits = BTreeMap::new();
     for name in catalog.role_names() {
         if let Some(limit) = catalog.role(&name)?.max_concurrent {
             limits.insert(name, limit);
         }
     }
-
-    let contents = match fs::read_to_string(repo.join(REPO_CONFIG)) {
-        Ok(contents) => contents,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(limits),
-        Err(e) => return Err(err(codes::ROLE_LIMITS_INVALID, format!("could not read {REPO_CONFIG}: {e}"))),
-    };
-    let overrides: BTreeMap<String, RoleOverride> = toml::from_str(&contents)
-        .map_err(|e| err(codes::ROLE_LIMITS_INVALID, format!("{REPO_CONFIG}: {e}")))?;
-    for (role, entry) in overrides {
-        if catalog.role(&role).is_err() {
-            let mut known = catalog.role_names();
-            known.sort();
-            return Err(err(
-                codes::ROLE_LIMITS_INVALID,
-                format!(
-                    "{REPO_CONFIG} names role '{role}', which no plugin of this Run supplies; known roles: {}",
-                    known.join(", ")
-                ),
-            ));
-        }
-        if entry.max_concurrent == 0 {
-            return Err(err(
-                codes::ROLE_LIMITS_INVALID,
-                format!("{REPO_CONFIG}: max_concurrent for '{role}' must be at least 1"),
-            ));
-        }
-        limits.insert(role, entry.max_concurrent);
-    }
+    limits.extend(repo.limits.clone());
     Ok(limits)
 }
 

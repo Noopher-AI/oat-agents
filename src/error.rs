@@ -53,6 +53,7 @@ pub mod codes {
     pub const ROLE_SOURCE_REQUIRED: &str = "role_source_required";
     pub const UNKNOWN_ROLE: &str = "unknown_role";
     pub const ROLE_LIMITS_INVALID: &str = "role_limits_invalid";
+    pub const ROLE_SETTINGS_INVALID: &str = "role_settings_invalid";
     pub const CORE_ROLE_INSTRUCTIONS_MISSING: &str = "core_role_instructions_missing";
     pub const PLUGIN_LOAD_FAILED: &str = "plugin_load_failed";
     pub const SKILL_CONFLICT: &str = "skill_conflict";

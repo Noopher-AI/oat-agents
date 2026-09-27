@@ -1,4 +1,5 @@
 pub mod memory;
+pub mod repository;
 
 use crate::error::{codes, err};
 use anyhow::Result;
@@ -7,6 +8,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Backend {
     Claude,
     Codex,
@@ -42,9 +44,11 @@ pub enum StartLocation {
     Existing,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelSetting {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 }
 

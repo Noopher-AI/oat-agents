@@ -84,9 +84,11 @@ fn render_baseline(repo: &str) -> String {
 /// instructions — in that order — and starts its session. Reopening a console whose session is
 /// still alive is a no-op that returns the existing record.
 ///
-/// The console runs on the backend the repository's plugins choose in `core/oat-console.toml`;
-/// `requested` is used only when no plugin chooses one, and one that contradicts a plugin's
-/// choice is refused rather than silently overridden either way. With neither, Claude Code.
+/// The console runs on the backend the repository chooses under `[oat-console]` in
+/// `.oat/roles.toml`, else the one its plugins choose in `core/oat-console.toml`; `requested`
+/// is used only when neither chooses one, and one that contradicts the choice is refused rather
+/// than silently overridden either way. With none, Claude Code. The repository's model settings
+/// are read afresh at every open, like its plugins.
 pub fn open(env: &dyn Environment, repo: &Path, requested: Option<Backend>) -> Result<ConsoleRecord> {
     let repo = repo
         .canonicalize()
@@ -112,21 +114,27 @@ pub fn open(env: &dyn Environment, repo: &Path, requested: Option<Backend>) -> R
     let catalog = &catalog;
 
     let core_role = catalog.core_role(CoreRole::Console)?;
-    let backend = match (core_role.backend, requested) {
-        (Some(chosen), Some(asked)) if chosen != asked => {
+    let settings = crate::role::repository::load(&repo, catalog)?.launch_for(CoreRole::Console.name());
+    let chosen = match (settings.backend, core_role.backend) {
+        (Some(backend), _) => Some((backend, crate::role::repository::REPO_CONFIG)),
+        (None, Some(backend)) => Some((backend, "core/oat-console.toml of its plugins")),
+        (None, None) => None,
+    };
+    let backend = match (chosen, requested) {
+        (Some((chosen, source)), Some(asked)) if chosen != asked => {
             return Err(err(
                 codes::INVALID_INPUT,
                 format!(
-                    "this repository's plugins run oat-console on {}; it cannot be opened on {}",
+                    "this repository runs oat-console on {} ({source}); it cannot be opened on {}",
                     chosen.label(),
                     asked.label()
                 ),
             ))
         }
-        (Some(chosen), _) => chosen,
+        (Some((chosen, _)), _) => chosen,
         (None, asked) => asked.unwrap_or(Backend::Claude),
     };
-    let model = core_role.models.get(&backend).cloned().unwrap_or_default();
+    let model = settings.model_for(backend, &core_role.models);
 
     let mut console_skills = core_role.skills.clone();
     console_skills.push(skills::oat_system_view_skill());

@@ -105,6 +105,8 @@ backend's skill directory before a launch.
 
 **Backend**
 The agent program a session runs: currently Claude Code or Codex.
+*Avoid*: **runtime** — it reads as where a Dispatch's commands run, which is the execution
+environment, not the program that runs the agent.
 
 ### Execution
 

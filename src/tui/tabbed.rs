@@ -1,11 +1,12 @@
-//! One agent's page: its live screen, its diff, or its log, under a row of
-//! tabs, in the space the timeline otherwise has.
+//! The page under the roster: the selected agent's live screen, its diff, its timeline or
+//! its log, under a row of tabs. With every agent selected, only the Run's timeline.
 
 use ratatui::prelude::*;
-use ratatui::widgets::{Paragraph, Tabs};
+use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs};
 
-use super::text::{pane, wrap_lines};
-use super::{TuiState, View};
+use super::TuiState;
+use super::model::string_field;
+use super::text::{clock, event_detail, event_glyph, pane, role_color, wrap_lines};
 use crate::event_log;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -14,17 +15,20 @@ pub enum Tab {
     Live,
     /// What its worktree changed since it started.
     Diff,
+    /// The log's entries about it, one per line; every agent's when none is selected.
+    Timeline,
     /// Its transcript and the log's record of it.
     Log,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 3] = [Tab::Live, Tab::Diff, Tab::Log];
+    pub const ALL: [Tab; 4] = [Tab::Live, Tab::Diff, Tab::Timeline, Tab::Log];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Live => "live",
             Self::Diff => "diff",
+            Self::Timeline => "timeline",
             Self::Log => "log",
         }
     }
@@ -36,10 +40,17 @@ impl Tab {
             .copied()
             .unwrap_or(self)
     }
+
+    /// The tab before this one among `tabs`, round again past the first.
+    pub fn prev_in(self, tabs: &[Tab]) -> Self {
+        let at = tabs.iter().position(|tab| *tab == self).unwrap_or(0);
+        tabs.get((at + tabs.len().max(1) - 1) % tabs.len().max(1))
+            .copied()
+            .unwrap_or(self)
+    }
 }
 
-pub fn draw_detail(frame: &mut Frame, area: Rect, state: &mut TuiState) {
-    debug_assert_eq!(state.view(), View::Detail);
+pub fn draw_page(frame: &mut Frame, area: Rect, state: &mut TuiState) {
     let parts = Layout::vertical([Constraint::Length(1), Constraint::Min(3)]).split(area);
     let shown = state.tabs();
     let tabs = Tabs::new(shown.iter().map(|tab| format!(" {} ", tab.label())))
@@ -56,6 +67,7 @@ pub fn draw_detail(frame: &mut Frame, area: Rect, state: &mut TuiState) {
     match state.tab() {
         Tab::Live => draw_preview(frame, parts[1], state),
         Tab::Diff => draw_diff(frame, parts[1], state),
+        Tab::Timeline => draw_timeline(frame, parts[1], state),
         Tab::Log => draw_log(frame, parts[1], state),
     }
 }
@@ -262,5 +274,62 @@ fn draw_log(frame: &mut Frame, area: Rect, state: &mut TuiState) {
             ),
         ),
         area,
+    );
+}
+
+/// The log's entries, one per line: the selected agent's, or the whole Run's.
+fn draw_timeline(frame: &mut Frame, area: Rect, state: &mut TuiState) {
+    state.set_viewport(area.height.saturating_sub(2) as usize);
+    let column = state.hash_column();
+    let timeline: Vec<Line> = state
+        .window()
+        .into_iter()
+        .map(|row| {
+            let event = string_field(row, "event").unwrap_or_default();
+            let (glyph, glyph_color) = event_glyph(&event);
+            let hash = string_field(row, "hash_id").unwrap_or_else(|| "·".to_owned());
+            let role = state
+                .agents
+                .iter()
+                .find(|agent| agent.hash_id == hash)
+                .and_then(|agent| agent.role.clone());
+            Line::from(vec![
+                Span::styled(format!("{} ", clock(row)), Style::new().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("{:<width$}", hash, width = column),
+                    Style::new().fg(role_color(role.as_deref())),
+                ),
+                Span::styled(format!("{glyph} "), Style::new().fg(glyph_color)),
+                Span::styled(format!("{:<14}", event), Style::new().fg(glyph_color)),
+                // Some event names fill their column; the detail still needs a gap after them.
+                Span::raw(match event_detail(row) {
+                    detail if event.chars().count() >= 14 && !detail.is_empty() => {
+                        format!(" {detail}")
+                    }
+                    detail => detail,
+                }),
+            ])
+        })
+        .collect();
+    let (first, total) = state.position();
+    frame.render_widget(
+        Paragraph::new(timeline).block(
+            pane(&title_of(state, "timeline"), true).title_bottom(
+                Line::from(format!(" {first}-{} of {total} ", state.last_row())).right_aligned(),
+            ),
+        ),
+        area,
+    );
+    let mut scrollbar = ScrollbarState::new(total.saturating_sub(state.viewport_rows()))
+        .position(first.saturating_sub(1));
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None),
+        area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        &mut scrollbar,
     );
 }

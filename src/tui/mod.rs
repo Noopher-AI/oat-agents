@@ -1,5 +1,5 @@
-//! The live view: every Run on this machine, each Run's roster and timeline, and each
-//! Dispatch's live screen, diff and log.
+//! The live view: every Run on this machine, each Run's roster, and under it the selected
+//! Dispatch's live screen, diff, timeline and log.
 //!
 //! The Store and the workflow log are what the roster and the timeline are built from —
 //! files an observer may always read; the agents themselves are watched through their tmux
@@ -21,9 +21,7 @@ use ratatui::crossterm::terminal::{
     supports_keyboard_enhancement,
 };
 use ratatui::prelude::*;
-use ratatui::widgets::{
-    List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -116,22 +114,6 @@ impl EventFilter {
     }
 }
 
-/// Which pane the arrow keys drive.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Focus {
-    Agents,
-    Timeline,
-}
-
-impl Focus {
-    fn other(self) -> Self {
-        match self {
-            Self::Agents => Self::Timeline,
-            Self::Timeline => Self::Agents,
-        }
-    }
-}
-
 /// What each transcript says, remembered so a large session file is parsed once rather
 /// than on every poll. A file is re-read only when its size or modification time changes.
 #[derive(Default)]
@@ -190,15 +172,6 @@ impl SpendIndex {
     }
 }
 
-/// Which screen is on top.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum View {
-    /// Agent list beside the timeline.
-    Overview,
-    /// One agent's own page: its screen, its diff, its log.
-    Detail,
-}
-
 /// What the loop should do after a key press.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Action {
@@ -235,9 +208,11 @@ pub struct TuiState {
     /// Index of the first visible timeline row when not following.
     scroll: usize,
     viewport: usize,
-    focus: Focus,
-    view: View,
+    /// The tab the operator last chose. It stays chosen from agent to agent; one that has no
+    /// such tab shows another (`tab()`).
     tab: Tab,
+    /// The agent the page under the roster was last built for.
+    page_of: Option<String>,
     /// First visible wrapped line of the detail screen.
     detail_scroll: usize,
     /// Wrapped line count of the detail screen, known once it is drawn.
@@ -254,7 +229,7 @@ pub struct TuiState {
     /// The message being written, which outlives the box it is written
     /// in: esc puts the draft down, and `N` picks it back up.
     notice: Option<Notice>,
-    /// The selected agent's live screen while its page is open.
+    /// The selected agent's live screen while its session runs.
     pub(super) preview: Option<Preview>,
     /// The size the preview box was last drawn at, so the pane can follow.
     pub(super) preview_area: Option<(u16, u16)>,
@@ -300,9 +275,8 @@ impl TuiState {
             follow: true,
             scroll: 0,
             viewport: 10,
-            focus: Focus::Agents,
-            view: View::Overview,
             tab: Tab::Live,
+            page_of: None,
             detail_scroll: 0,
             detail_total: 0,
             detail_follow: true,
@@ -393,23 +367,16 @@ impl TuiState {
             None => 0,
         };
         self.clamp_scroll();
-        if self.view == View::Detail {
-            // An agent that finishes while its page is open is left with
-            // only its log, as if it had been opened finished.
-            if self.tabs() == [Tab::Log] && self.tab != Tab::Log {
-                self.tab = Tab::Log;
-                self.typing = false;
-                self.preview = None;
-                self.diff = None;
-            }
-            self.load_transcript();
-        }
+        // A page for an agent that is gone, or has finished, is rebuilt on the next poll
+        // (`sync_page`); until then its transcript at least keeps up.
+        self.load_transcript();
     }
 
     /// Asks each live session whether it exists and whether its screen has
     /// moved. Cheap per row, and bounded: a roster of dozens only gets the
     /// existence check.
     pub fn refresh_sessions(&mut self, control: &dyn Control) {
+        self.sync_page(control);
         let live: Vec<AgentRow> = self
             .agents
             .iter()
@@ -432,7 +399,7 @@ impl TuiState {
                 }
             }
         }
-        if self.view == View::Detail && self.tab == Tab::Diff {
+        if self.tab() == Tab::Diff {
             self.refresh_diff(control);
         }
     }
@@ -453,7 +420,7 @@ impl TuiState {
     /// Re-captures the open agent's screen, unless the viewer is reading
     /// back through its history.
     pub fn refresh_preview(&mut self, control: &dyn Control) {
-        if self.view != View::Detail || self.tab != Tab::Live {
+        if self.tab() != Tab::Live {
             return;
         }
         let Some(preview) = self.preview.as_mut() else {
@@ -480,8 +447,7 @@ impl TuiState {
 
     /// Whether the live screen is what is being looked at right now.
     pub fn preview_visible(&self) -> bool {
-        self.view == View::Detail
-            && self.tab == Tab::Live
+        self.tab() == Tab::Live
             && self
                 .preview
                 .as_ref()
@@ -546,16 +512,14 @@ impl TuiState {
         self.follow
     }
 
-    pub fn focus(&self) -> Focus {
-        self.focus
-    }
-
-    pub fn view(&self) -> View {
-        self.view
-    }
-
+    /// The tab on show: the one last chosen, or, for an agent without it, its log, and with
+    /// every agent selected the timeline.
     pub fn tab(&self) -> Tab {
-        self.tab
+        let tabs = self.tabs();
+        [self.tab, Tab::Log, Tab::Timeline]
+            .into_iter()
+            .find(|tab| tabs.contains(tab))
+            .unwrap_or(tabs[0])
     }
 
     #[cfg(test)]
@@ -629,26 +593,23 @@ impl TuiState {
         }
     }
 
-    /// The tabs the open agent's page has. A finished agent has only its
-    /// log; one still running has its terminal and its diff as well.
+    /// The tabs the page under the roster has. Every agent at once is only the Run's
+    /// timeline; a finished agent has its timeline and its log; one still running has its
+    /// terminal and its diff as well.
     pub fn tabs(&self) -> &'static [Tab] {
-        if self
-            .selected_agent()
-            .is_some_and(|agent| agent.state() == "exited")
-        {
-            &[Tab::Log]
-        } else if self.console {
-            // It stands in its own directory, not in a worktree: there is
-            // no diff to show.
-            &[Tab::Live, Tab::Log]
-        } else {
-            &Tab::ALL
+        match self.selected_agent() {
+            None => &[Tab::Timeline],
+            Some(agent) if agent.state() == "exited" => &[Tab::Timeline, Tab::Log],
+            // It stands in its own directory, not in a worktree, and belongs to no Run
+            // (ADR-0005): there is no diff and no timeline to show.
+            Some(_) if self.console => &[Tab::Live, Tab::Log],
+            Some(_) => &Tab::ALL,
         }
     }
 
     /// The session the live tab is showing, when it is a running one.
     fn live_session(&self) -> Option<String> {
-        if self.view != View::Detail || self.tab != Tab::Live {
+        if self.tab() != Tab::Live {
             return None;
         }
         self.preview.as_ref().map(|preview| preview.session.clone())
@@ -910,43 +871,94 @@ impl TuiState {
         self.scroll = self.scroll.min(total.saturating_sub(self.viewport));
     }
 
-    /// Opens the selected agent's page: on its live screen while its
-    /// session runs, and on its log once it has finished — with the screen
-    /// its session left behind still there under the preview tab.
-    pub fn open_detail(&mut self, control: &dyn Control) {
-        let Some(agent) = self.selected_agent() else {
+    /// Builds the page under the roster for the selected agent, when it was built for
+    /// another one or its live session has come or gone: its live screen while its session
+    /// runs, nothing to watch once it has finished.
+    pub fn sync_page(&mut self, control: &dyn Control) {
+        let hash = self.selected_agent().map(|agent| agent.hash_id.clone());
+        let session = self
+            .selected_agent()
+            .filter(|agent| agent.state() != "exited")
+            .and_then(|agent| agent.terminal_handle.clone())
+            .filter(|session| control.is_alive(session));
+        let showing = self.preview.as_ref().map(|preview| preview.session.clone());
+        if hash == self.page_of && session == showing {
             return;
-        };
-        let finished = agent.state() == "exited";
-        let session = agent.terminal_handle.clone().filter(|_| !finished);
-        let alive = session
-            .as_deref()
-            .is_some_and(|session| control.is_alive(session));
-        self.view = View::Detail;
-        // A finished agent has only its log: there is no terminal to watch
-        // and its worktree is no longer changing.
-        self.tab = if alive { Tab::Live } else { Tab::Log };
-        // Open on the newest turn: an operator asks what an agent is doing
-        // now, not what it was asked an hour ago.
-        self.detail_follow = true;
-        self.detail_scroll = 0;
-        self.diff = None;
-        self.preview = session.filter(|_| alive).map(Preview::new);
-        self.preview_area = None;
-        self.load_transcript();
+        }
+        if hash != self.page_of {
+            // Open on the newest turn: an operator asks what an agent is doing now, not what
+            // it was asked an hour ago.
+            self.detail_follow = true;
+            self.detail_scroll = 0;
+            self.diff = None;
+            self.page_of = hash;
+            self.load_transcript();
+        }
         // The page opens watching, not typing: every key would otherwise go straight to the
         // agent. Enter steps in.
         self.typing = false;
-    }
-
-    fn close_detail(&mut self) {
-        self.view = View::Overview;
-        self.typing = false;
         self.pressed = None;
         self.dragged = false;
-        self.preview = None;
+        self.preview = session.map(Preview::new);
         self.preview_area = None;
-        self.diff = None;
+        if self.tab() == Tab::Diff {
+            self.refresh_diff(control);
+        }
+    }
+
+    /// Moves the roster's selection, and the page under it with it.
+    fn select_by(&mut self, delta: isize, control: &dyn Control) {
+        self.selected = self
+            .selected
+            .saturating_add_signed(delta)
+            .min(self.agents.len());
+        self.clamp_scroll();
+        self.sync_page(control);
+    }
+
+    /// Scrolls whichever tab is on show by whole lines.
+    fn scroll_page(&mut self, delta: isize, control: &dyn Control) {
+        match self.tab() {
+            Tab::Timeline => self.scroll_timeline(delta),
+            Tab::Live => self.preview_scroll(control, delta),
+            Tab::Diff | Tab::Log => self.scroll_detail(delta),
+        }
+    }
+
+    /// `g` and `G`: the top or the newest end of whichever tab is on show.
+    fn page_edge(&mut self, top: bool, control: &dyn Control) {
+        match self.tab() {
+            Tab::Timeline => {
+                self.follow = !top;
+                self.scroll = 0;
+            }
+            Tab::Live if top => self.preview_scroll(control, isize::MIN / 2),
+            Tab::Live => {
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.leave_scroll();
+                }
+            }
+            Tab::Diff | Tab::Log => {
+                self.detail_follow = !top;
+                self.detail_scroll = 0;
+            }
+        }
+    }
+
+    /// Tab and shift+tab: the next or the previous of the page's tabs.
+    fn switch_tab(&mut self, forward: bool, control: &dyn Control) {
+        let tab = self.tab();
+        self.tab = if forward {
+            tab.next_in(self.tabs())
+        } else {
+            tab.prev_in(self.tabs())
+        };
+        self.detail_follow = true;
+        self.detail_scroll = 0;
+        self.typing = false;
+        if self.tab() == Tab::Diff {
+            self.refresh_diff(control);
+        }
     }
 
     /// `x` closes the Run on screen. The console's window has no Run, and
@@ -1000,53 +1012,6 @@ impl TuiState {
             }));
             return Action::Continue;
         }
-        if self.view == View::Detail {
-            return self.on_detail_key(key, control);
-        }
-        match key.code {
-            KeyCode::Char('q') => return Action::Quit,
-            KeyCode::Esc => return Action::Back,
-            // Right mirrors Left in the detail view: the list is a column you
-            // step into, so the arrow that leaves it should also enter it.
-            KeyCode::Enter | KeyCode::Right => self.open_detail(control),
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Action::Quit;
-            }
-            KeyCode::Char('x') => self.ask_to_close(),
-            KeyCode::Tab | KeyCode::BackTab => self.focus = self.focus.other(),
-            KeyCode::Down | KeyCode::Char('j') => match self.focus {
-                Focus::Agents => {
-                    self.selected = (self.selected + 1).min(self.agents.len());
-                    self.clamp_scroll();
-                }
-                Focus::Timeline => self.scroll_timeline(1),
-            },
-            KeyCode::Up | KeyCode::Char('k') => match self.focus {
-                Focus::Agents => {
-                    self.selected = self.selected.saturating_sub(1);
-                    self.clamp_scroll();
-                }
-                Focus::Timeline => self.scroll_timeline(-1),
-            },
-            KeyCode::Char('e') => {
-                self.filter = self.filter.next();
-                self.clamp_scroll();
-            }
-            KeyCode::Char('f') => self.follow = !self.follow,
-            KeyCode::Char('g') | KeyCode::Home => {
-                self.follow = false;
-                self.scroll = 0;
-            }
-            KeyCode::Char('G') | KeyCode::End => self.follow = true,
-            KeyCode::PageUp => self.scroll_timeline(-(self.viewport as isize)),
-            KeyCode::PageDown => self.scroll_timeline(self.viewport as isize),
-            _ => {}
-        }
-        Action::Continue
-    }
-
-    /// One agent's page: tabs over its screen, its diff and its log.
-    fn on_detail_key(&mut self, key: KeyEvent, control: &dyn Control) -> Action {
         // The live tab is the agent's terminal: every key is the agent's,
         // except the one that gives the keys back to this view.
         if self.typing {
@@ -1097,7 +1062,8 @@ impl TuiState {
                 None => self.typing = false,
             }
         }
-        if self.tab == Tab::Live
+        let on_preview = self.tab() == Tab::Live;
+        if on_preview
             && self.preview.as_ref().is_some_and(Preview::selecting_with_keys)
             && self.on_select_key(key, control)
         {
@@ -1105,29 +1071,21 @@ impl TuiState {
         }
         let page = self.viewport.max(1) as isize;
         let shift = key.modifiers.contains(KeyModifiers::SHIFT);
-        let on_preview = self.tab == Tab::Live;
         match key.code {
             KeyCode::Char('q') => return Action::Quit,
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return Action::Quit;
             }
-            // Esc first leaves the history, then the page; backspace and
-            // left leave the page outright.
+            // Esc first leaves the selection, then the history, then the Run.
             KeyCode::Esc => match self.preview.as_mut() {
-                Some(preview) if preview.has_selection() => preview.clear_selection(),
-                Some(preview) if preview.scrolling() => preview.leave_scroll(),
-                _ => self.close_detail(),
-            },
-            KeyCode::Backspace | KeyCode::Left => self.close_detail(),
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.tab = self.tab.next_in(self.tabs());
-                self.detail_follow = true;
-                self.detail_scroll = 0;
-                if self.tab == Tab::Diff {
-                    self.refresh_diff(control);
+                Some(preview) if on_preview && preview.has_selection() => {
+                    preview.clear_selection()
                 }
-                self.typing = false;
-            }
+                Some(preview) if on_preview && preview.scrolling() => preview.leave_scroll(),
+                _ => return Action::Back,
+            },
+            KeyCode::Tab => self.switch_tab(true, control),
+            KeyCode::BackTab => self.switch_tab(false, control),
             // Into the agent's terminal: the live tab is watched until Enter, which also
             // leaves any reading back, since typing is at the live screen.
             KeyCode::Enter if on_preview => {
@@ -1138,22 +1096,21 @@ impl TuiState {
             }
             KeyCode::Char('x') => self.ask_to_close(),
             KeyCode::Char('v') if on_preview => self.begin_select(control),
-            KeyCode::Up | KeyCode::Down if on_preview && shift => {
-                self.preview_scroll(control, if key.code == KeyCode::Up { -1 } else { 1 });
+            // The arrows pick the agent; shift keeps them on the page.
+            KeyCode::Up | KeyCode::Down if shift => {
+                self.scroll_page(if key.code == KeyCode::Up { -1 } else { 1 }, control);
             }
-            KeyCode::PageUp if on_preview => self.preview_scroll(control, -page),
-            KeyCode::PageDown if on_preview => self.preview_scroll(control, page),
-            KeyCode::Up | KeyCode::Char('k') if on_preview => self.preview_scroll(control, -1),
-            KeyCode::Down | KeyCode::Char('j') if on_preview => self.preview_scroll(control, 1),
-            KeyCode::Down | KeyCode::Char('j') => self.scroll_detail(1),
-            KeyCode::Up | KeyCode::Char('k') => self.scroll_detail(-1),
-            KeyCode::PageDown => self.scroll_detail(page),
-            KeyCode::PageUp => self.scroll_detail(-page),
-            KeyCode::Char('g') | KeyCode::Home => {
-                self.detail_follow = false;
-                self.detail_scroll = 0;
+            KeyCode::Down | KeyCode::Char('j') => self.select_by(1, control),
+            KeyCode::Up | KeyCode::Char('k') => self.select_by(-1, control),
+            KeyCode::PageDown => self.scroll_page(page, control),
+            KeyCode::PageUp => self.scroll_page(-page, control),
+            KeyCode::Char('g') | KeyCode::Home => self.page_edge(true, control),
+            KeyCode::Char('G') | KeyCode::End => self.page_edge(false, control),
+            KeyCode::Char('e') if self.tab() == Tab::Timeline => {
+                self.filter = self.filter.next();
+                self.clamp_scroll();
             }
-            KeyCode::Char('G') | KeyCode::End => self.detail_follow = true,
+            KeyCode::Char('f') if self.tab() == Tab::Timeline => self.follow = !self.follow,
             _ => {}
         }
         Action::Continue
@@ -1240,7 +1197,7 @@ impl TuiState {
 
     /// Where a terminal cell falls in the live box, when it does.
     fn in_preview(&self, column: u16, row: u16) -> Option<(u16, u16)> {
-        if self.view != View::Detail || self.tab != Tab::Live || self.preview.is_none() {
+        if self.tab() != Tab::Live || self.preview.is_none() {
             return None;
         }
         let ((x, y), (cols, rows)) = (self.preview_origin?, self.preview_area?);
@@ -1321,10 +1278,10 @@ impl TuiState {
     /// The wheel drives whichever screen is showing.
     pub fn on_scroll(&mut self, up: bool, control: &dyn Control) {
         let delta = if up { -3 } else { 3 };
-        match (self.view, self.tab) {
-            (View::Overview, _) => self.scroll_timeline(delta),
-            (View::Detail, Tab::Live) => self.live_wheel(up, control),
-            (View::Detail, _) => self.scroll_detail(delta),
+        match self.tab() {
+            Tab::Timeline => self.scroll_timeline(delta),
+            Tab::Live => self.live_wheel(up, control),
+            Tab::Diff | Tab::Log => self.scroll_detail(delta),
         }
     }
 
@@ -1416,94 +1373,77 @@ impl TuiState {
                 item("any other key", "cancel"),
             ]];
         }
-        match self.view {
-            View::Overview => vec![
+        let scrolling = self.preview.as_ref().is_some_and(Preview::scrolling);
+        let keys = self.preview.as_ref().is_some_and(Preview::selecting_with_keys);
+        let (moves, mut acts) = match self.tab() {
+            Tab::Live if keys => (
                 vec![
-                    item(
-                        "tab",
-                        match self.focus {
-                            Focus::Agents => "pane:agents",
-                            Focus::Timeline => "pane:timeline",
-                        },
-                    ),
-                    item(
-                        "↑↓",
-                        match self.focus {
-                            Focus::Agents => "agent",
-                            Focus::Timeline => "scroll",
-                        },
-                    ),
+                    item("↑↓←→", "move"),
+                    item("PgUp/PgDn", "page"),
+                    item("g/G", "top/end"),
+                    item("0/$", "line start/end"),
+                ],
+                vec![
+                    item("v", "mark"),
+                    item("y", "copy"),
+                    item("esc", "cancel"),
+                ],
+            ),
+            Tab::Live if scrolling => (
+                vec![
+                    item("↑↓", "agent"),
+                    item("shift+↑↓", "line"),
+                    item("PgUp/PgDn", "page"),
+                    item("wheel", "scroll"),
+                ],
+                vec![
+                    item("v/drag", "select"),
+                    item("enter", "type"),
+                    item("esc", "back to live"),
+                ],
+            ),
+            Tab::Live => (
+                vec![item("↑↓", "agent"), item("PgUp/wheel", "scroll back")],
+                vec![item("enter", "type"), item("v/drag", "select")],
+            ),
+            Tab::Timeline => (
+                vec![
+                    item("↑↓", "agent"),
                     item("PgUp/PgDn", "page"),
                     item("g/G", "top/end"),
                 ],
                 vec![
-                    item("enter", "open agent"),
                     item("e", format!("events:{}", self.filter().label())),
                     item(
                         "f",
                         format!("follow:{}", if self.following() { "on" } else { "off" }),
                     ),
-                    self.close_item(),
                 ],
-                self.global_items(Some(("esc", "runs"))),
-            ],
-            View::Detail => {
-                let scrolling = self.preview.as_ref().is_some_and(Preview::scrolling);
-                let keys = self.preview.as_ref().is_some_and(Preview::selecting_with_keys);
-                let (moves, acts) = match self.tab {
-                    Tab::Live if keys => (
-                        vec![
-                            item("↑↓←→", "move"),
-                            item("PgUp/PgDn", "page"),
-                            item("g/G", "top/end"),
-                            item("0/$", "line start/end"),
-                        ],
-                        vec![
-                            item("v", "mark"),
-                            item("y", "copy"),
-                            item("esc", "cancel"),
-                        ],
-                    ),
-                    Tab::Live if scrolling => (
-                        vec![
-                            item("↑↓", "line"),
-                            item("PgUp/PgDn", "page"),
-                            item("wheel", "scroll"),
-                        ],
-                        vec![
-                            item("v/drag", "select"),
-                            item("enter", "type"),
-                            item("esc", "back to live"),
-                        ],
-                    ),
-                    Tab::Live => (
-                        vec![item("↑↓/PgUp/wheel", "scroll back")],
-                        vec![item("enter", "type"), item("v/drag", "select")],
-                    ),
-                    _ => (
-                        vec![
-                            item("↑↓", "scroll"),
-                            item("PgUp/PgDn", "page"),
-                            item("g/G", "top/end"),
-                        ],
-                        Vec::new(),
-                    ),
-                };
-                let mut acts = acts;
-                if self.tabs().len() > 1 {
-                    acts.push(item("tab", format!("tab:{}", self.tab.label())));
-                }
-                acts.push(self.close_item());
-                // Esc is taken while reading back, and the left arrow while
-                // selecting with the keys; backspace always leaves.
-                let back = match self.tab {
-                    Tab::Live if keys => ("backspace", "back"),
-                    Tab::Live if scrolling => ("←", "back"),
-                    _ => ("esc/←", "back"),
-                };
-                vec![moves, acts, self.global_items(Some(back))]
-            }
+            ),
+            Tab::Diff | Tab::Log => (
+                vec![
+                    item("↑↓", "agent"),
+                    item("PgUp/PgDn", "page"),
+                    item("g/G", "top/end"),
+                ],
+                Vec::new(),
+            ),
+        };
+        if self.tabs().len() > 1 {
+            acts.push(item("tab", format!("tab:{}", self.tab().label())));
         }
+        acts.push(self.close_item());
+        // Esc is taken while selecting or reading back; backspace is not bound, so there
+        // the hint only says where esc goes next.
+        let back = match self.tab() {
+            Tab::Live if keys || scrolling => None,
+            _ => Some(("esc", "runs")),
+        };
+        let mut global = self.global_items(back);
+        if back.is_none() {
+            global.push(item("q", "quit"));
+        }
+        vec![moves, acts, global]
     }
 }
 
@@ -1683,87 +1623,19 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
     let mut list_state = ListState::default().with_selected(Some(highlighted));
     frame.render_stateful_widget(
         List::new(rows)
-            .block(pane(
-                " agents ",
-                state.view() == View::Overview && state.focus() == Focus::Agents,
-            ))
+            .block(pane(" agents ", true))
             .highlight_style(Style::new().add_modifier(Modifier::REVERSED)),
         areas[1],
         &mut list_state,
     );
 
-    if state.view() == View::Detail {
-        // One agent's page takes the timeline's place; the roster above
-        // stays visible and keeps updating, it just cannot take the arrows.
-        tabbed::draw_detail(frame, areas[2], state);
-    } else {
-        draw_timeline(frame, areas[2], state);
-    }
+    // The selected agent's page, or the Run's timeline; the roster above keeps the arrows.
+    tabbed::draw_page(frame, areas[2], state);
 
     let footer = Layout::vertical([Constraint::Length(hints.len() as u16), Constraint::Length(1)])
         .split(areas[3]);
     frame.render_widget(Paragraph::new(hints), footer[0]);
     menu::draw_notice(frame, footer[1], state.notice.as_ref());
-}
-
-fn draw_timeline(frame: &mut Frame, area: Rect, state: &mut TuiState) {
-    state.set_viewport(area.height.saturating_sub(2) as usize);
-    let column = state.hash_column();
-    let timeline: Vec<Line> = state
-        .window()
-        .into_iter()
-        .map(|row| {
-            let event = string_field(row, "event").unwrap_or_default();
-            let (glyph, glyph_color) = event_glyph(&event);
-            let hash = string_field(row, "hash_id").unwrap_or_else(|| "·".to_owned());
-            let role = state
-                .agents
-                .iter()
-                .find(|agent| agent.hash_id == hash)
-                .and_then(|agent| agent.role.clone());
-            Line::from(vec![
-                Span::styled(format!("{} ", clock(row)), Style::new().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("{:<width$}", hash, width = column),
-                    Style::new().fg(role_color(role.as_deref())),
-                ),
-                Span::styled(format!("{glyph} "), Style::new().fg(glyph_color)),
-                Span::styled(format!("{:<14}", event), Style::new().fg(glyph_color)),
-                // Some event names fill their column; the detail still needs a gap after them.
-                Span::raw(match event_detail(row) {
-                    detail if event.chars().count() >= 14 && !detail.is_empty() => {
-                        format!(" {detail}")
-                    }
-                    detail => detail,
-                }),
-            ])
-        })
-        .collect();
-    let (first, total) = state.position();
-    let title = match state.selected_agent() {
-        Some(agent) => format!(" timeline · {} ", agent.hash_id),
-        None => " timeline ".to_owned(),
-    };
-    frame.render_widget(
-        Paragraph::new(timeline).block(
-            pane(&title, state.focus() == Focus::Timeline).title_bottom(
-                Line::from(format!(" {first}-{} of {total} ", state.last_row())).right_aligned(),
-            ),
-        ),
-        area,
-    );
-    let mut scrollbar = ScrollbarState::new(total.saturating_sub(state.viewport_rows()))
-        .position(first.saturating_sub(1));
-    frame.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(None)
-            .end_symbol(None),
-        area.inner(Margin {
-            vertical: 1,
-            horizontal: 0,
-        }),
-        &mut scrollbar,
-    );
 }
 
 /// Ctrl+\, or F2 for a terminal that swallows it: the console from
@@ -1978,7 +1850,7 @@ fn event_loop(
                     state.refresh_spend(&mut usage);
                     state.refresh_sessions(control);
                     state.selected = state.agents().len().min(1);
-                    state.open_detail(control);
+                    state.sync_page(control);
                     // Restarted from inside the console, it replaces the console on screen;
                     // what the console was opened over stays parked beneath it.
                     if console.in_place {

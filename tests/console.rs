@@ -164,6 +164,7 @@ fn each_repositorys_read_only_run_listing_only_shows_its_own_runs() {
         meta_dispatch_id: None,
         big_plan: None,
         role_limits: Default::default(),
+        role_settings: Default::default(),
     };
     store.create_run(&base).unwrap();
     let mut run_b = base.clone();
@@ -249,4 +250,25 @@ fn without_a_plugins_choice_the_console_takes_the_request_or_claude_code() {
         oat_agents::console::open(&env, repo.path(), Some(Backend::Codex)).unwrap().backend,
         "codex"
     );
+}
+
+#[test]
+fn the_repositorys_roles_toml_chooses_the_consoles_backend_and_model_over_its_plugins() {
+    let world = TestWorld::new();
+    let env = world.env();
+    let repo = tempfile::tempdir().unwrap();
+    console_on(&world, repo.path(), "backend = \"codex\"\n[model.claude]\nmodel = \"plugin-model\"\n");
+    std::fs::write(
+        repo.path().join(".oat/roles.toml"),
+        "[oat-console]\nbackend = \"claude\"\n[oat-console.model.claude]\nreasoning_effort = \"low\"\n",
+    )
+    .unwrap();
+
+    let error = oat_agents::console::open(&env, repo.path(), Some(Backend::Codex)).unwrap_err();
+    assert!(error.to_string().contains(".oat/roles.toml"), "{error}");
+
+    assert_eq!(oat_agents::console::open(&env, repo.path(), None).unwrap().backend, "claude");
+    let calls = world.tmux_calls();
+    assert!(calls.iter().any(|c| c.contains("OAT_MODEL=plugin-model")), "{calls:?}");
+    assert!(calls.iter().any(|c| c.contains("OAT_EFFORT=low")), "{calls:?}");
 }

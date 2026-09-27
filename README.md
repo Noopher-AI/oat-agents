@@ -26,7 +26,7 @@ Declare a repository's plugins, then start a Run:
 
 ```sh
 oat-agents init --repo . --git <plugin-url> <commit> <name>
-oat-agents meta fire --prompt "…" --repo . --agent claude [--exec-profile <name>]
+oat-agents meta fire --prompt "…" --repo . [--agent claude|codex] [--exec-profile <name>]
 oat-agents tui                     # watch it
 ```
 

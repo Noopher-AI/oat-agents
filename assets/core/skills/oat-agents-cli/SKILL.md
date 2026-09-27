@@ -15,8 +15,9 @@ commands a human uses to start, observe and take over a Run.
 
 This is the human entry point: it creates the Run, the coordinator's (`oat-meta`) worktree
 and branch, and launches its tmux session. Exactly one of `--prompt` or `--input-file` is
-required. `--agent` picks the backend; with no model set anywhere, a role runs on its
-backend's own default.
+required. `--agent` picks the Run's backend; without it, the repository's `.oat/roles.toml`
+does (`backend` under `[oat-meta]`), then Claude Code. With no model set anywhere, a role runs
+on its backend's own default.
 
 ## Delegating inside a Run
 
@@ -32,6 +33,12 @@ A role can be limited in how many of its Dispatches run at once in one Run: the 
 `"queued": true` with the Dispatch's id and its place in line, and the CLI starts it when a
 place comes free. The limits a Run started with are in `meta fire`'s output under
 `role_limits`.
+
+`.oat/roles.toml` can also give a role its own `backend` and, under
+`[<role>.model.<backend>]`, its `model` and `reasoning_effort`, replacing the plugin's. A role
+fire runs on `--agent` if given, else the role's backend there, else the Run's; each launch
+reports the backend it got. What a Run settled is in `meta fire`'s output under
+`role_settings`.
 
 ## Observing a Run without taking it over
 

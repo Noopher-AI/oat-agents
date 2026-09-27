@@ -38,6 +38,10 @@ pub struct RunRecord {
     /// plugins' defaults and `.oat/roles.toml`. A role not listed has no limit.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub role_limits: std::collections::BTreeMap<String, u32>,
+    /// The backend and model each role is launched with where `.oat/roles.toml` sets them,
+    /// settled at `meta fire` like `role_limits`. A role not listed takes its plugin's.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub role_settings: std::collections::BTreeMap<String, crate::role::repository::LaunchSettings>,
 }
 
 impl RunRecord {
@@ -509,6 +513,7 @@ mod tests {
             meta_dispatch_id: None,
             big_plan: None,
             role_limits: Default::default(),
+            role_settings: Default::default(),
         };
         store.create_run(&empty).unwrap();
         assert_eq!(store.load_run("r1").unwrap().plugins, Vec::new());

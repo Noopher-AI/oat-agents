@@ -33,8 +33,10 @@ pub struct FireArgs {
     pub name: Option<String>,
     #[arg(long)]
     pub base_branch: Option<String>,
-    #[arg(long, default_value = "claude")]
-    pub agent: String,
+    /// The Run's backend. Defaults to `backend` under `[oat-meta]` in `.oat/roles.toml`, then
+    /// Claude Code.
+    #[arg(long)]
+    pub agent: Option<String>,
     #[arg(long)]
     pub trust_workspace: bool,
     /// The execution profile this Run's roles should use. Defaults to the repository's
@@ -60,7 +62,6 @@ pub fn run(command: MetaCommand, env: &dyn Environment, exec: &dyn ExecEnvironme
 
 fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     let big_plan = crate::resolve_text_input(&args.prompt, &args.input_file)?;
-    let backend = Backend::from_str(&args.agent)?;
     let repo = args
         .repo
         .canonicalize()
@@ -71,8 +72,15 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
     let (resolved, catalog) = plugins::gate(&repo, env)?;
     let catalog = &catalog;
     let core_role = catalog.core_role(CoreRole::Meta)?;
-    // Settled once, with the plugins: a Run keeps the limits it started with.
-    let role_limits = crate::concurrency::resolve_limits(&repo, catalog)?;
+    // Settled once, with the plugins: a Run keeps the limits and the launch settings it
+    // started with.
+    let repo_roles = crate::role::repository::load(&repo, catalog)?;
+    let role_limits = crate::concurrency::resolve_limits(&repo_roles, catalog)?;
+    let meta_settings = repo_roles.launch_for(CoreRole::Meta.name());
+    let backend = match &args.agent {
+        Some(agent) => Backend::from_str(agent)?,
+        None => meta_settings.backend.unwrap_or(Backend::Claude),
+    };
 
     let run_name = args
         .name
@@ -127,6 +135,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         meta_dispatch_id: Some(dispatch_id.clone()),
         big_plan: Some(big_plan.clone()),
         role_limits,
+        role_settings: repo_roles.launch,
     };
     store.create_run(&run_record)?;
 
@@ -161,11 +170,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         details: Some(exec.to_json()),
     })?;
 
-    let model = core_role
-        .models
-        .get(&backend)
-        .cloned()
-        .unwrap_or_default();
+    let model = meta_settings.model_for(backend, &core_role.models);
 
     let spec = LaunchSpec {
         run: run_record.clone(),
@@ -201,7 +206,9 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         "branch": dispatch.branch,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": exec.to_json(),
+        "backend": run_record.backend,
         "role_limits": run_record.role_limits,
+        "role_settings": run_record.role_settings,
     }))
 }
 

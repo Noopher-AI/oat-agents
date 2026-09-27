@@ -162,6 +162,7 @@ fn fixture() -> Fixture {
         meta_dispatch_id: Some("dispatch-0".to_string()),
         big_plan: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
         role_limits: Default::default(),
+        role_settings: Default::default(),
     };
     store.create_run(&open).unwrap();
     store
@@ -397,7 +398,8 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
     assert!(text.contains("finished"), "the rule separates live from finished:\n{text}");
     assert!(text.contains(WAITING_MARK), "the coordinator that asked is marked:\n{text}");
     assert!(text.contains(" timeline "), "{text}");
-    assert!(text.contains("enter open agent"), "{text}");
+    assert!(text.contains("↑↓ agent"), "{text}");
+    assert!(text.contains("e events:all"), "{text}");
     assert!(text.contains("ctrl+\\ console"), "{text}");
     assert!(text.contains("ctrl+l checklist"), "{text}");
 }
@@ -420,6 +422,54 @@ fn selecting_a_dispatch_narrows_the_timeline_to_its_own_entries() {
     assert_eq!(events, vec![events::AGENT_ENTER.to_string()]);
 }
 
+/// Presses ↑ to the top of the roster, then ↓ until `role` is selected.
+fn arrow_to(state: &mut TuiState, control: &RecordingControl, role: &str) {
+    for _ in 0..=state.agents().len() {
+        state.on_key_with(key(KeyCode::Up), control);
+    }
+    for _ in 0..state.agents().len() {
+        if state.selected_agent().and_then(|agent| agent.role.as_deref()) == Some(role) {
+            return;
+        }
+        state.on_key_with(key(KeyCode::Down), control);
+    }
+    assert_eq!(state.selected_agent().and_then(|agent| agent.role.as_deref()), Some(role));
+}
+
+#[test]
+fn the_arrows_pick_an_agent_and_its_page_follows_on_the_tab_last_chosen() {
+    let fx = fixture();
+    let session = fx.session_of("worker");
+    let mut control = RecordingControl::default();
+    control.alive.insert(session.clone());
+    control.screens.insert(session, "running 3 tests ... ok".to_string());
+    let mut state = fx.state();
+    state.refresh_sessions(&control);
+
+    // Every agent at once is only the Run's timeline.
+    assert_eq!(state.tabs(), &[Tab::Timeline]);
+    assert_eq!(state.tab(), Tab::Timeline);
+
+    arrow_to(&mut state, &control, "worker");
+    assert_eq!(state.tabs(), &[Tab::Live, Tab::Diff, Tab::Timeline, Tab::Log]);
+    assert_eq!(state.tab(), Tab::Live, "a running agent opens on its screen");
+    state.refresh_preview(&control);
+    let text = screen(120, 30, |frame| draw(frame, &mut state));
+    assert!(text.contains("running 3 tests"), "{text}");
+
+    state.on_key_with(key(KeyCode::Tab), &control);
+    state.on_key_with(key(KeyCode::Tab), &control);
+    assert_eq!(state.tab(), Tab::Timeline);
+    let text = screen(120, 30, |frame| draw(frame, &mut state));
+    assert!(text.contains("· timeline "), "{text}");
+    assert!(text.contains("agent_enter"), "{text}");
+
+    // A finished agent keeps the timeline chosen, and has no screen to watch.
+    arrow_to(&mut state, &control, "reviewer");
+    assert_eq!(state.tab(), Tab::Timeline);
+    assert!(state.preview.is_none());
+}
+
 #[test]
 fn the_event_filter_cycles_through_all_lifecycle_and_decisions() {
     let fx = fixture();
@@ -436,7 +486,7 @@ fn the_event_filter_cycles_through_all_lifecycle_and_decisions() {
 }
 
 #[test]
-fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
+fn selecting_a_live_agent_shows_its_screen_and_enter_hands_it_every_key() {
     let fx = fixture();
     let session = fx.session_of("worker");
     let mut control = RecordingControl::default();
@@ -447,9 +497,9 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     let mut state = fx.state();
     state.refresh_sessions(&control);
     select(&mut state, "worker");
+    state.sync_page(&control);
 
-    state.on_key_with(key(KeyCode::Enter), &control);
-    assert_eq!(state.view(), View::Detail);
+    // No key opens the page: selecting the agent is enough.
     assert_eq!(state.tab(), Tab::Live);
     assert!(!state.typing(), "the live tab opens watching, not typing");
     state.refresh_preview(&control);
@@ -461,8 +511,8 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     assert_eq!(live_border(&mut state), Some(Color::DarkGray), "the pane is grey until enter");
     state.fit_preview(&control);
 
-    // Watching, keys stay with the view: j scrolls back rather than reaching the agent.
-    state.on_key_with(key(KeyCode::Char('j')), &control);
+    // Watching, keys stay with the view: PgDn scrolls rather than reaching the agent.
+    state.on_key_with(key(KeyCode::PageDown), &control);
     assert!(
         !control.calls().iter().any(|call| call.starts_with("type ")),
         "{:?}",
@@ -478,7 +528,7 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
 
     state.on_key_with(key(KeyCode::Char('q')), &control);
     state.on_key_with(key(KeyCode::Enter), &control);
-    assert_eq!(state.view(), View::Detail, "q is the agent's while typing");
+    assert!(state.typing(), "q is the agent's while typing");
     let calls = control.calls();
     assert!(calls.contains(&format!("type {session} Text(\"q\")")), "{calls:?}");
     assert!(calls.contains(&format!("type {session} Key(\"Enter\")")), "{calls:?}");
@@ -490,9 +540,12 @@ fn a_live_agents_page_opens_on_its_screen_and_hands_it_every_key() {
     assert_eq!(state.tab(), Tab::Diff);
     assert!(!state.typing());
     state.on_key_with(key(KeyCode::Tab), &control);
+    assert_eq!(state.tab(), Tab::Timeline, "the timeline sits left of the log");
+    state.on_key_with(key(KeyCode::Tab), &control);
     assert_eq!(state.tab(), Tab::Log);
-    state.on_key_with(key(KeyCode::Esc), &control);
-    assert_eq!(state.view(), View::Overview);
+    state.on_key_with(key(KeyCode::BackTab), &control);
+    assert_eq!(state.tab(), Tab::Timeline);
+    assert_eq!(state.on_key_with(key(KeyCode::Esc), &control), Action::Back);
 }
 
 #[test]
@@ -507,7 +560,7 @@ fn the_diff_tab_shows_what_the_worktree_changed() {
     );
     let mut state = fx.state();
     select(&mut state, "worker");
-    state.open_detail(&control);
+    state.sync_page(&control);
     state.on_key_with(key(KeyCode::Tab), &control);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("added line"), "{text}");
@@ -515,14 +568,14 @@ fn the_diff_tab_shows_what_the_worktree_changed() {
 }
 
 #[test]
-fn a_finished_agent_has_only_its_log_which_says_where_it_ran() {
+fn a_finished_agent_has_its_timeline_and_its_log_which_says_where_it_ran() {
     let fx = fixture();
     let control = RecordingControl::default();
     let mut state = fx.state();
     select(&mut state, "reviewer");
-    state.open_detail(&control);
-    assert_eq!(state.tabs(), &[Tab::Log]);
-    assert_eq!(state.tab(), Tab::Log);
+    state.sync_page(&control);
+    assert_eq!(state.tabs(), &[Tab::Timeline, Tab::Log]);
+    assert_eq!(state.tab(), Tab::Log, "the live tab it would have shown falls back to the log");
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("HOST (no pod): this Run has no execution profile"), "{text}");
     assert!(text.contains("outcome succeeded"), "{text}");
@@ -530,7 +583,9 @@ fn a_finished_agent_has_only_its_log_which_says_where_it_ran() {
 
     let mut state = fx.state();
     select(&mut state, "worker");
-    state.open_detail(&control);
+    state.sync_page(&control);
+    state.on_key_with(key(KeyCode::BackTab), &control);
+    assert_eq!(state.tab(), Tab::Log);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     assert!(text.contains("env pod:oat-env-worker   image 0123456789ab"), "{text}");
 }
@@ -623,7 +678,7 @@ fn watching_worker(fx: &Fixture, screen_text: &str) -> (TuiState, RecordingContr
     let mut state = fx.state();
     state.refresh_sessions(&control);
     select(&mut state, "worker");
-    state.open_detail(&control);
+    state.sync_page(&control);
     state.refresh_preview(&control);
     let text = screen(120, 30, |frame| draw(frame, &mut state));
     (state, control, text)
@@ -679,8 +734,9 @@ fn v_selects_with_the_keys_and_y_copies() {
     for _ in 0..6 {
         state.on_key_with(key(KeyCode::Right), &control);
     }
-    // The arrows moved the cursor rather than leaving the page.
-    assert_eq!(state.view(), View::Detail);
+    // The arrows moved the cursor rather than picking another agent or tab.
+    assert_eq!(state.tab(), Tab::Live);
+    assert_eq!(state.selected_agent().and_then(|agent| agent.role.as_deref()), Some("worker"));
     state.on_key_with(key(KeyCode::Char('y')), &control);
     assert!(
         control.calls().contains(&"copy \"running\"".to_string()),
