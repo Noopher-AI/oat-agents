@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use super::generate_id;
 use crate::env::integration::ExecEnvironments;
 use crate::env::state::EnvStore;

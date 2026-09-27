@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 oat-agents contributors
+#
 # Builds oat-agents and installs it, plus the human-facing oat-agents-cli skill, into
 # overridable directories. See --help.
 #

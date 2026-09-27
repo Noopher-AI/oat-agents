@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! One directory in, one validated plugin out — or every error found in it (ticket
 //! Architecture). Nothing here knows about any other plugin; combining several is `catalog`'s
 //! job.

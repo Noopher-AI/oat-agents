@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! How many Dispatches of one role a Run may run at once, and the queue a `role fire` over
 //! that limit waits in.
 //!

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Fetching and caching a git-pinned plugin (ticket Architecture): shallow-fetched with the
 //! `git` executable into `~/.oat/plugins/<source hash>/<commit>/`, re-verified against the
 //! commit before use every time, whether it was just fetched or was already cached.

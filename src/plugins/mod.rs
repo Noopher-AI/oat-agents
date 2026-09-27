@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! `.oat/plugins.toml` (ticket Scope): the ordered, pinned list of plugins a repository
 //! declares, and turning that list into resolved, trust-checked plugin directories a `RoleCatalog`
 //! can be built from. `plugin::` (singular) is F4's plugin *format* and loader; this module is

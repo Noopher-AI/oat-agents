@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use super::*;
 use crate::event_log::{LogEntry, now_iso};
 use crate::store::{DispatchRecord, RunRecord};

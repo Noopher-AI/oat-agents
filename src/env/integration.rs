@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The seam a role launch uses to reach an execution environment.
 //!
 //! `role fire` only ever needs two things from this module: bring one environment up (or reuse

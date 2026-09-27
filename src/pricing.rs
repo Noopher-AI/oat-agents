@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! What a model's tokens cost. Claude Code records token usage per turn but never a price, so
 //! cost is computed from a snapshot of published rates. An unknown model reports tokens with
 //! no cost rather than guessing a number that would look authoritative and be wrong.

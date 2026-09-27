@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The page under the roster: the selected agent's live screen, its diff, its timeline or
 //! its log, under a row of tabs. With every agent selected, only the Run's timeline.
 

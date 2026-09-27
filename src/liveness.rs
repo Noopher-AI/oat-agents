@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The liveness block a timed-out `run wait` carries (ticket §4.4): the only moment a
 //! coordinator has to decide whether to keep waiting, so that is where the evidence goes.
 

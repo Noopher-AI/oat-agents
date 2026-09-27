@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The image a role runs in, pinned to something that can be compared.
 //!
 //! A tag is a moving target; an image id is not. Two dispatches that report the same image id

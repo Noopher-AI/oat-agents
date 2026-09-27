@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use clap::Parser;
 use oat_agents::environment::SystemEnvironment;
 use oat_agents::error::{codes, to_failure};

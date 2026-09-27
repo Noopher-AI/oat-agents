@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The seam between the workflow and whatever actually runs a command.
 
 use super::{EnvRecord, EnvSpec, ExecOutcome, ExecRequest};

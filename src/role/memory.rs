@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use super::{
     missing_core_instructions_error, unknown_role_error, CoreRole, CoreRoleDefinition,
     RoleCatalog, RoleDefinition,

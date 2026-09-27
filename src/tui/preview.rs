@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The live screen of one agent's tmux session, as the viewer shows it.
 //!
 //! tmux draws the screen; this only asks for it (`capture-pane -e`) and

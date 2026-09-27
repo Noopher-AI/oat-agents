@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! An index of what every Dispatch in a Run has spent, read from its transcript. This lives
 //! here rather than under a live-view module (which is F3's) so the lifecycle this ticket
 //! ships does not depend on a module it must not create (ticket §3.1); F3's live view is

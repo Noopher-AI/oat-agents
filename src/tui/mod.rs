@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The live view: every Run on this machine, each Run's roster, and under it the selected
 //! Dispatch's live screen, diff, timeline and log.
 //!

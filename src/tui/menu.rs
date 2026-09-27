@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The key hints under every screen, and the notice line under them.
 //!
 //! Every key that does something where the view stands is listed here, and

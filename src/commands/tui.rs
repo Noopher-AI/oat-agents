@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use crate::environment::Environment;
 use anyhow::Result;
 use serde_json::{json, Value};

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The Kubernetes backend.
 //!
 //! This is the only file that knows Kubernetes exists (ticket Architecture). It never reads

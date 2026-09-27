@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contributor documentation for the public release: `CONTRIBUTING.md`, `SECURITY.md`,
   `CODE_OF_CONDUCT.md`, issue and pull request templates, `CODEOWNERS`, and Dependabot
   configuration. CI now also runs on pull requests.
+- An SPDX license header naming the oat-agents contributors on every source file, checked in CI.
 
 ### Fixed
 

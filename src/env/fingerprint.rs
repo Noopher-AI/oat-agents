@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! What the code in a worktree looked like when a command ran.
 //!
 //! The ledger can already prove that `cargo test` ran in a particular image.

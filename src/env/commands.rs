@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! The `env` command group, and the lifecycle calls a launch makes.
 //!
 //! Agents only ever reach for `env exec` (and `env doctor` when it fails). Creating and

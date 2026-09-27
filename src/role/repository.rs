@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! `.oat/roles.toml`: what a repository sets for the roles its Runs use, over the defaults its
 //! plugins declare — a role's concurrency limit (ADR-0006), and the backend and per-backend
 //! model a role is launched with (ADR-0007).

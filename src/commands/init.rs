@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! `oat-agents init [--local]` (ticket Scope): declares a repository's pinned plugins, and
 //! optionally its execution profile, without ever overwriting an existing configuration
 //! without saying so.

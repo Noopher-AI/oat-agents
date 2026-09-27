@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 //! Reads what a Codex-backed Dispatch has spent from Codex's own session files.
 //!
 //! **Verified, not assumed**: Codex writes one `rollout-*.jsonl` per thread under

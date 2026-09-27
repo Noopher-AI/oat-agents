@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 use crate::env::integration::ExecEnvironments;
 use crate::environment::Environment;
 use crate::error::{codes, err};

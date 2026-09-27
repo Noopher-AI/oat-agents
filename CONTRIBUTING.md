@@ -26,7 +26,22 @@ cargo build --locked --all-targets
 cargo test --locked
 cargo clippy --locked --all-targets -- -D warnings
 .github/scripts/check-dev-docs.sh
+.github/scripts/check-license-headers.sh
 ```
+
+## License headers
+
+Every source file (`.rs`, `.sh`, `.py`) starts with this header, after the shebang line if
+there is one, using the file's comment syntax:
+
+```rust
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+```
+
+Copyright stays with each contributor; "oat-agents contributors" names them collectively, the
+same way `LICENSE` does. `.github/scripts/check-license-headers.sh` checks it in CI. Files under
+`tests/fixtures/` are exempt.
 
 ## Core or plugin?
 

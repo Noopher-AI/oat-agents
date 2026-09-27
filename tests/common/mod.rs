@@ -1,4 +1,7 @@
 #![allow(dead_code)]
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 oat-agents contributors
+
 
 use oat_agents::environment::TestEnvironment;
 use oat_agents::plugins::{self, PluginPin};
