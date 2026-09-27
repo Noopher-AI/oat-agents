@@ -1825,13 +1825,12 @@ struct PendingConsole {
 /// The repository `ctrl+\\` opens a console for: the one the view was started in (ADR-0005),
 /// found from the git top level so a subdirectory reaches it too, whichever Run is on screen.
 fn console_target(start: &Path) -> PathBuf {
-    let repo = crate::worktree::run_git(start, &["rev-parse", "--show-toplevel"])
+    crate::worktree::run_git(start, &["rev-parse", "--show-toplevel"])
         .ok()
         .filter(|output| output.status.success())
         .map(|output| PathBuf::from(String::from_utf8_lossy(&output.stdout).trim()))
         .filter(|repo| !repo.as_os_str().is_empty())
-        .unwrap_or_else(|| start.to_path_buf());
-    repo
+        .unwrap_or_else(|| start.to_path_buf())
 }
 
 fn event_loop(
