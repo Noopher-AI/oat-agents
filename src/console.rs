@@ -160,13 +160,18 @@ pub fn open(env: &dyn Environment, repo: &Path, requested: Option<Backend>) -> R
     );
 
     fs::write(dir.join("prompt.md"), &full_prompt)?;
-    let script = launch::launch_script(backend);
+    let mcp_dispatch_id = format!("console-{}", repository_id(&repo));
+    launch::write_mcp_config(&dir, &core_role.mcp_servers, &mcp_dispatch_id)?;
+    let script = launch::launch_script(backend, &core_role.mcp_servers, &mcp_dispatch_id);
     let script_path = dir.join("launch.sh");
     fs::write(&script_path, &script)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))?;
+        fs::set_permissions(
+            &script_path,
+            fs::Permissions::from_mode(if core_role.mcp_servers.is_empty() { 0o755 } else { 0o700 }),
+        )?;
     }
 
     let mut env_vars = vec![
@@ -185,7 +190,8 @@ pub fn open(env: &dyn Environment, repo: &Path, requested: Option<Backend>) -> R
         }
     }
 
-    tmux.start_session(&session, &dir, &env_vars, &script_path.to_string_lossy())?;
+    let launch_command = launch::tmux_launch_command(&script_path);
+    tmux.start_session(&session, &dir, &env_vars, &launch_command)?;
 
     let record = ConsoleRecord {
         repo: repo_label,

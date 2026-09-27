@@ -68,12 +68,26 @@ pub struct SkillRef {
     pub files: Vec<SkillFile>,
 }
 
+/// A validated stdio MCP server declared by a plugin and bound to a role. The backend receives
+/// this configuration only for that launch; it is never written to the user's global config.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpServer {
+    pub name: String,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct RoleDefinition {
     pub name: String,
     pub instructions: String,
     pub models: BTreeMap<Backend, ModelSetting>,
     pub skills: Vec<SkillRef>,
+    /// The plugin servers this role may use in its own Dispatch.
+    pub mcp_servers: Vec<McpServer>,
     pub start: StartLocation,
     pub exec_environment: bool,
     pub prior_verification: bool,
@@ -102,6 +116,8 @@ pub struct CoreRoleDefinition {
     pub instructions: String,
     pub models: BTreeMap<Backend, ModelSetting>,
     pub skills: Vec<SkillRef>,
+    /// Plugin servers made available to this core-role launch.
+    pub mcp_servers: Vec<McpServer>,
     /// The backend a plugin chose for this core role; only the console takes one.
     pub backend: Option<Backend>,
 }

@@ -18,6 +18,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
             instructions: "Write the pottery this task asks for.".to_string(),
             models: BTreeMap::new(),
             skills: Vec::new(),
+            mcp_servers: Vec::new(),
             start: StartLocation::Fresh,
             exec_environment: false,
             prior_verification: false,
@@ -28,6 +29,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
             instructions: "Review the pottery someone else made.".to_string(),
             models: BTreeMap::new(),
             skills: Vec::new(),
+            mcp_servers: Vec::new(),
             start: StartLocation::Existing,
             exec_environment: false,
             prior_verification: false,
@@ -39,6 +41,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 backend: None,
             },
         )
@@ -48,6 +51,7 @@ fn fixture_catalog() -> oat_agents::role::memory::InMemoryCatalog {
                 instructions: "Observe the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 backend: None,
             },
         )
@@ -147,6 +151,7 @@ fn role_fire_defaults_to_the_run_s_recorded_backend() {
                     executable: false,
                 }],
             }],
+            mcp_servers: Vec::new(),
             start: StartLocation::Fresh,
             exec_environment: false,
             prior_verification: false,
@@ -158,6 +163,7 @@ fn role_fire_defaults_to_the_run_s_recorded_backend() {
                 instructions: "Coordinate the pottery workshop.".to_string(),
                 models: BTreeMap::new(),
                 skills: Vec::new(),
+                mcp_servers: Vec::new(),
                 backend: None,
             },
         )

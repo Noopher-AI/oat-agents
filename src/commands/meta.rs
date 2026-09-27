@@ -187,6 +187,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         instructions: vec![core_role.instructions.clone()],
         task: big_plan,
         skills: core_role.skills.clone(),
+        mcp_servers: core_role.mcp_servers.clone(),
         model: model.clone(),
         role_names_for_preamble: catalog.role_names(),
         created_fresh_worktree: true,

@@ -68,7 +68,8 @@ coordinator's decisions. The only place an observer reads a Run from.
 ### Roles
 
 **Role**
-A named kind of agent: its instructions, the skills it may load, and its model settings.
+A named kind of agent: its instructions, the skills and MCP servers it may use, and its model
+settings.
 *Avoid*: **subagent** — a role runs as its own session in its own worktree, not inside
 another agent's turn; treating it as a subagent leads to relaying work that was meant to
 be delegated.
@@ -98,6 +99,12 @@ A unit that supplies roles, skills and conventions to the core without changing 
 format is decided by the first spec.
 *Avoid*: **customization** for changes made to the core itself — a customization that
 needs a core edit is a missing plugin hook, and naming it so is how the hook gets built.
+
+**MCP server**
+A stdio process declared by a plugin and exposed to a backend session only when that
+session's role binds it. The Run or console session's plugin snapshot fixes its launch
+configuration.
+*Avoid*: assuming every role, or the backend's other sessions, can see a plugin's MCP server.
 
 **Skill**
 A versioned instruction file an agent loads on demand, synchronized to the selected

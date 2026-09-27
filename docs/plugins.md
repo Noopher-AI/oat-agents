@@ -16,10 +16,10 @@ format.
 
 ```
 <plugin>/
-├── oat-plugin.toml        format version, name, description
+├── oat-plugin.toml        format version, name, description, optional stdio MCP servers
 ├── roles/<role>/
 │   ├── role.toml          description, start location, execution environment,
-│   │                      prior verification, concurrency limit, skills,
+│   │                      prior verification, concurrency limit, skills, MCP bindings,
 │   │                      per-backend model
 │   └── instructions.md
 ├── skills/<skill>/
@@ -42,6 +42,10 @@ typo is refused at load time rather than silently ignored.
 format_version = 1
 name = "sample-plugin"
 description = "A worked example plugin covering every kind of customization the plugin format supports."
+
+[mcp_servers.local_index]
+command = "oat-local-search"
+args = ["--stdio"]
 ```
 
 - `format_version` — this build understands version `1`. A plugin naming any other version is
@@ -49,6 +53,10 @@ description = "A worked example plugin covering every kind of customization the 
 - `name` — the plugin's own name. It is not a role or skill name and never appears with an
   `oat-` prefix (that prefix is the core's).
 - `description` — one line for a human reading a list of plugins.
+- `[mcp_servers.<name>]` — an optional stdio MCP server declaration. `command` is the
+  executable; `args` and `env` are optional literal strings. OAT does not expand variables or
+  invoke a shell. Do not put credentials in a plugin file: the declaration is part of the
+  plugin snapshot and launch configuration.
 
 ## `roles/<role>/role.toml`
 
@@ -59,6 +67,7 @@ exec_environment = true
 prior_verification = true
 max_concurrent = 2
 skills = ["sample-skill"]
+mcp_servers = ["local_index"]
 
 [model.claude]
 model = "sample-claude-model"
@@ -85,6 +94,8 @@ reasoning_effort = "high"
   place comes free.
 - `skills` — the names of skills, from this same plugin's `skills/`, that a Dispatch of this
   role may load. A name with no matching `skills/<name>/` directory is refused.
+- `mcp_servers` — optional names from this plugin's `[mcp_servers]` manifest table. Only these
+  servers are declared to this role's launches; unknown or repeated names refuse the plugin.
 - `[model.claude]` / `[model.codex]` — optional per-backend `model` and `reasoning_effort`.
   Leaving a backend out means that role uses the backend's own default when launched there.
   These are the plugin's defaults; a repository replaces them in `.oat/roles.toml` (see below).
@@ -174,10 +185,14 @@ resolved by picking one silently.
 
 ```toml
 skills = ["sample-skill"]
+mcp_servers = ["local_index"]
 
 [model.claude]
 model = "sample-claude-meta-model"
 ```
+
+`mcp_servers` in either file uses names from that same plugin's manifest and gives them only to
+that core role's launches.
 
 `core/oat-console.toml` may also choose the backend the console runs on:
 
@@ -193,14 +208,37 @@ above). `core/oat-meta.toml` may not set `backend`: `oat-meta` runs on the Run's
 by `meta fire --agent` or the repository. Two plugins choosing the console's backend is a
 conflict like any other.
 
+## MCP launch scope
+
+An MCP declaration in `oat-plugin.toml` is inert until a role in that same plugin names it in
+`mcp_servers`. A Run uses the plugin tree snapshotted at `meta fire`; the console uses the
+snapshot made when it opens. Editing the source plugin does not change an existing Run or an
+already-open console. `plugin validate --path <plugin>` is for a standalone team plugin that
+supplies both required core-role instruction files; it checks declarations and bindings and
+reports their names without trusting the plugin or starting any declared command. A plugin that
+supplies only roles can instead be validated as part of the complete plugin set at Run launch.
+
+At launch, OAT passes only that role's bound stdio servers to its selected backend. It does not
+write backend-wide configuration. Codex receives launch-specific `-c mcp_servers.<key>=...`
+overrides with OAT-scoped keys associated with the Dispatch or console session, so a plugin name
+does not overwrite a user's same-named Codex server. Other Codex settings continue to follow
+Codex's normal configuration rules. Claude Code receives a private config file beside the
+launch and `--strict-mcp-config`; its MCP server list is therefore limited to the role's
+bindings. An unbound role receives no plugin MCP servers.
+
+The server command, arguments and environment values are passed as literal strings; OAT does not
+run a shell to start them or expand variables. The MCP process is local to the backend session.
+Treat its manifest environment values and arguments as public plugin contents, not as a secret
+store.
+
 ## Validation
 
-Loading a plugin never stops at the first problem: every malformed file, every missing file and
-every declared skill with no matching directory is collected and reported together, so a plugin
-author sees everything wrong with a plugin in one run rather than fixing one error at a time.
-Combining several plugins into one Run works the same way — a role name two plugins both
-define, and a core role's skill or model two plugins both supply, are each reported by the
-plugin names involved.
+Loading a plugin never stops at the first problem: every malformed file, every missing file,
+every declared skill with no matching directory, and every missing or repeated MCP binding is
+collected and reported together, so a plugin author sees everything wrong with a plugin in one
+run rather than fixing one error at a time. Combining several plugins into one Run works the
+same way: duplicate role names and MCP server names, plus a core role's skill or model conflicts,
+are reported by the plugin names involved.
 
 ## Where this fits
 

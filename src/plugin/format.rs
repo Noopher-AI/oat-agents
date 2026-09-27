@@ -22,6 +22,20 @@ pub struct PluginManifest {
     pub format_version: u32,
     pub name: String,
     pub description: String,
+    /// Named stdio MCP servers this plugin can bind to a role. Values remain literal; OAT
+    /// does not interpolate shell syntax or environment variables in them.
+    #[serde(default)]
+    pub mcp_servers: BTreeMap<String, McpServerToml>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct McpServerToml {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -55,6 +69,10 @@ pub struct RoleToml {
     pub max_concurrent: Option<u32>,
     #[serde(default)]
     pub skills: Vec<String>,
+    /// MCP servers from this plugin's `[mcp_servers]` manifest table, made available only to
+    /// Dispatches of this role.
+    #[serde(default)]
+    pub mcp_servers: Vec<String>,
     #[serde(default)]
     pub model: BTreeMap<String, ModelToml>,
 }
@@ -69,6 +87,10 @@ pub struct CoreRoleToml {
     pub backend: Option<String>,
     #[serde(default)]
     pub skills: Vec<String>,
+    /// MCP servers from this plugin's `[mcp_servers]` manifest table, made available only to
+    /// launches of this core role.
+    #[serde(default)]
+    pub mcp_servers: Vec<String>,
     #[serde(default)]
     pub model: BTreeMap<String, ModelToml>,
 }
