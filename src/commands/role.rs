@@ -26,6 +26,11 @@ pub struct FireArgs {
     pub role: String,
     #[arg(long)]
     pub from: Option<PathBuf>,
+    /// For a role that starts in an existing worktree: give it a new worktree at this commit
+    /// instead of an existing Dispatch's, for work nobody's worktree holds, such as a review
+    /// of a whole epic branch.
+    #[arg(long, conflicts_with = "from")]
+    pub at: Option<String>,
     #[arg(long)]
     pub name: Option<String>,
     #[arg(long)]
@@ -58,11 +63,13 @@ fn fire(args: FireArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
     // re-reading `.oat/plugins.toml` or re-checking trust.
     let catalog = catalog_from_snapshot(&store.run_plugin_snapshot_dir(&run_id))?;
 
+    let at = args.at.as_deref().map(|reference| resolve_at(reference, &run_record)).transpose()?;
     let request = QueuedFire {
         seq: 0,
         dispatch_id: generate_id("dispatch"),
         role: args.role.clone(),
         from: args.from.clone(),
+        at,
         name: args.name.clone(),
         agent: args.agent.clone(),
         trust_workspace: args.trust_workspace,
@@ -122,18 +129,37 @@ fn check_request(request: &QueuedFire, catalog: &dyn RoleCatalog, run_record: &R
     if let Some(agent) = &request.agent {
         Backend::from_str(agent)?;
     }
-    match (role_def.start, &request.from) {
-        (StartLocation::Fresh, Some(_)) => Err(err(
+    match (role_def.start, &request.from, &request.at) {
+        (StartLocation::Fresh, Some(_), _) => Err(err(
             codes::INVALID_ROLE_OPTION,
             format!("role '{}' starts fresh; --from is not accepted", request.role),
         )),
-        (StartLocation::Existing, None) => Err(err(
-            codes::ROLE_SOURCE_REQUIRED,
-            format!("role '{}' starts in an existing worktree; --from is required", request.role),
+        (StartLocation::Fresh, None, Some(_)) => Err(err(
+            codes::INVALID_ROLE_OPTION,
+            format!("role '{}' starts fresh; --at is not accepted", request.role),
         )),
-        (StartLocation::Existing, Some(from)) => existing_worktree(from, run_record).map(|_| ()),
-        (StartLocation::Fresh, None) => Ok(()),
+        (StartLocation::Existing, Some(_), Some(_)) => Err(err(
+            codes::INVALID_ROLE_OPTION,
+            format!("role '{}' takes --from or --at, not both", request.role),
+        )),
+        (StartLocation::Existing, None, None) => Err(err(
+            codes::ROLE_SOURCE_REQUIRED,
+            format!("role '{}' starts in an existing worktree; --from or --at is required", request.role),
+        )),
+        (StartLocation::Existing, Some(from), None) => existing_worktree(from, run_record).map(|_| ()),
+        (StartLocation::Existing, None, Some(at)) => resolve_at(at, run_record).map(|_| ()),
+        (StartLocation::Fresh, None, None) => Ok(()),
     }
+}
+
+/// The full commit id `--at` names in the Run's repository.
+fn resolve_at(reference: &str, run_record: &RunRecord) -> Result<String> {
+    worktree::resolve_commit(Path::new(&run_record.repo), reference)?.ok_or_else(|| {
+        err(
+            codes::INVALID_ROLE_OPTION,
+            format!("--at '{reference}' names no commit in this Run's repository"),
+        )
+    })
 }
 
 fn existing_worktree(from: &Path, run_record: &RunRecord) -> Result<PathBuf> {
@@ -252,8 +278,8 @@ fn launch(
     let launch_name = request.name.clone().unwrap_or_else(|| generate_id(&request.role));
     let dispatch_id = request.dispatch_id.clone();
 
-    let (worktree_path, branch, created_fresh) = match role_def.start {
-        StartLocation::Fresh => {
+    let (worktree_path, branch, created_fresh) = match (role_def.start, &request.at) {
+        (StartLocation::Fresh, _) => {
             let branch = worktree::branch_name(&run_record.name, &launch_name);
             let path = worktree::worktree_path(&repo, &run_record.name, &launch_name);
             let meta_worktree = run_record
@@ -265,7 +291,13 @@ fn launch(
             worktree::create_worktree(&repo, &path, &branch, &base_commit)?;
             (path, branch, true)
         }
-        StartLocation::Existing => {
+        (StartLocation::Existing, Some(at)) => {
+            let branch = worktree::branch_name(&run_record.name, &launch_name);
+            let path = worktree::worktree_path(&repo, &run_record.name, &launch_name);
+            worktree::create_worktree(&repo, &path, &branch, at)?;
+            (path, branch, true)
+        }
+        (StartLocation::Existing, None) => {
             let from = request.from.as_deref().unwrap_or(Path::new(""));
             let canonical = existing_worktree(from, run_record)?;
             let branch_output = worktree::run_git(&canonical, &["rev-parse", "--abbrev-ref", "HEAD"])?;
@@ -357,6 +389,7 @@ fn launch(
         "backend": dispatch.backend,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
+        "at": request.at,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": env_binding.to_json(),
     }))

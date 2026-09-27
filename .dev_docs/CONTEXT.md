@@ -111,7 +111,8 @@ environment, not the program that runs the agent.
 ### Execution
 
 **Worktree**
-A git worktree the core creates for one Dispatch, branched from its coordinator's worktree.
+A git worktree the core creates for one Dispatch, branched from its coordinator's worktree,
+or, for a role that starts in an existing worktree and is fired with `--at`, from that commit.
 
 **Execution environment**
 A container, described by an execution profile, in which a Dispatch's build and test

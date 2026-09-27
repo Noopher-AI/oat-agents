@@ -306,6 +306,7 @@ mod tests {
             dispatch_id: "d4444".to_string(),
             role: "reviewer".to_string(),
             from: None,
+            at: None,
             name: Some("kiln-review".to_string()),
             agent: None,
             trust_workspace: false,

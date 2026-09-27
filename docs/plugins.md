@@ -71,8 +71,9 @@ reasoning_effort = "high"
 - `description` — one line for a human reading a list of roles; it is not part of a Dispatch's
   prompt.
 - `start` — either `"fresh"`, a new child worktree is created for every Dispatch of this role,
-  or `"existing"`, the Dispatch runs inside a worktree named at launch with `--from`. Naming the
-  wrong one at launch is refused, not defaulted.
+  or `"existing"`, the Dispatch runs inside a worktree named at launch with `--from`, or, with
+  `--at <commit>`, in a new worktree of its own at that commit. Naming the wrong one at launch
+  is refused, not defaulted.
 - `exec_environment` — whether a Dispatch of this role gets an execution environment (F2 says
   what that means at launch time; this plugin only declares whether the role wants one).
 - `prior_verification` — whether a Dispatch of this role's prompt carries the execution

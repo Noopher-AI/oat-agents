@@ -214,6 +214,82 @@ fn existing_role_runs_in_the_named_worktree() {
     assert_eq!(result["worktree"].as_str().unwrap(), meta_worktree);
 }
 
+fn git(dir: &std::path::Path, args: &[&str]) -> String {
+    let output = std::process::Command::new("git").current_dir(dir).args(args).output().unwrap();
+    assert!(output.status.success(), "git {args:?} failed");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+#[test]
+fn existing_role_gets_a_new_worktree_at_the_named_commit() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
+    let env = world.env();
+    let catalog = fixture_catalog();
+
+    let fire = parse(&[
+        "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(),
+        "--name", "run-at", "--agent", "claude",
+    ]);
+    let meta_result = run_json(fire, &env, &catalog);
+    let meta_worktree = meta_result["worktree"].as_str().unwrap().to_string();
+
+    // An epic branch that moved on after the Run began, and that no Dispatch's worktree holds.
+    git(&repo.path(), &["branch", "epic/S1-kiln", "main"]);
+    let scratch = tempfile::tempdir().unwrap();
+    let epic_tree = scratch.path().join("epic");
+    git(&repo.path(), &["worktree", "add", "-q", &epic_tree.to_string_lossy(), "epic/S1-kiln"]);
+    std::fs::write(epic_tree.join("KILN.md"), "fired\n").unwrap();
+    git(&epic_tree, &["add", "."]);
+    git(&epic_tree, &["commit", "-q", "-m", "kiln"]);
+    let epic_head = git(&repo.path(), &["rev-parse", "epic/S1-kiln"]);
+
+    let env_with_run = world.env().with_var("OAT_RUN_ID", "run-at");
+    let role_fire = parse(&[
+        "role", "fire", "reviewer", "--at", "epic/S1-kiln", "--name", "s1-bigreview",
+        "--prompt", "review the whole epic",
+    ]);
+    let result = run_json(role_fire, &env_with_run, &catalog);
+
+    let worktree = result["worktree"].as_str().unwrap();
+    assert_ne!(worktree, meta_worktree, "it gets a worktree of its own");
+    assert_eq!(result["at"].as_str().unwrap(), epic_head, "the reference is resolved to a commit");
+    assert_eq!(git(std::path::Path::new(worktree), &["rev-parse", "HEAD"]), epic_head);
+    assert!(std::path::Path::new(worktree).join("KILN.md").exists());
+}
+
+#[test]
+fn at_is_refused_for_a_fresh_role_a_missing_commit_and_beside_from() {
+    let repo = TempRepo::new();
+    let world = TestWorld::new();
+    common::install_pottery_plugin(&world, &repo.path());
+    let env = world.env();
+    let catalog = fixture_catalog();
+
+    let fire = parse(&[
+        "meta", "fire", "--prompt", "plan", "--repo", &repo.path().to_string_lossy(),
+        "--name", "run-at-refused", "--agent", "claude",
+    ]);
+    let meta_result = run_json(fire, &env, &catalog);
+    let meta_worktree = meta_result["worktree"].as_str().unwrap().to_string();
+    let env_with_run = world.env().with_var("OAT_RUN_ID", "run-at-refused");
+
+    let fresh = parse(&["role", "fire", "worker", "--at", "main", "--prompt", "do work"]);
+    let err = execute(fresh, &env_with_run, &catalog).unwrap_err();
+    assert_eq!(to_failure(&err).code, codes::INVALID_ROLE_OPTION);
+
+    let missing = parse(&["role", "fire", "reviewer", "--at", "no-such-branch", "--prompt", "review"]);
+    let err = execute(missing, &env_with_run, &catalog).unwrap_err();
+    assert_eq!(to_failure(&err).code, codes::INVALID_ROLE_OPTION);
+
+    let both = Cli::try_parse_from([
+        "oat-agents", "role", "fire", "reviewer", "--from", &meta_worktree, "--at", "main",
+        "--prompt", "review",
+    ]);
+    assert!(both.is_err(), "--from and --at name two different places to start");
+}
+
 #[test]
 fn from_is_refused_for_a_fresh_role() {
     let repo = TempRepo::new();

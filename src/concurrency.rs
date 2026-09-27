@@ -41,6 +41,10 @@ pub struct QueuedFire {
     pub dispatch_id: String,
     pub role: String,
     pub from: Option<PathBuf>,
+    /// The commit a role that starts in an existing worktree gets a new one at, resolved when
+    /// it was fired, so a branch that moves while the launch waits does not move the review.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
     pub name: Option<String>,
     pub agent: Option<String>,
     pub trust_workspace: bool,

@@ -110,6 +110,16 @@ pub fn create_worktree(repo: &Path, path: &Path, branch: &str, base_commit: &str
     )
 }
 
+/// The full commit id `reference` names in `repo`, or `None` when it names no commit.
+pub fn resolve_commit(repo: &Path, reference: &str) -> Result<Option<String>> {
+    let spec = format!("{reference}^{{commit}}");
+    let output = run_git(repo, &["rev-parse", "--verify", "--quiet", "--end-of-options", &spec])?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&output.stdout).trim().to_string()))
+}
+
 pub fn current_commit(repo: &Path) -> Result<String> {
     let output = run_git(repo, &["rev-parse", "HEAD"])?;
     if !output.status.success() {

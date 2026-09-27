@@ -21,11 +21,14 @@ on its backend's own default.
 
 ## Delegating inside a Run
 
-`role fire <role> [--from <worktree>] [--name <launch-name>] --prompt <text> |
+`role fire <role> [--from <worktree> | --at <commit>] [--name <launch-name>] --prompt <text> |
 --input-file <path>` belongs to the coordinator's own session — it fails with
-`run_not_bound` outside one, because it reads `OAT_RUN_ID` from the environment. `--from` is
-required for a role that starts in an existing Dispatch's worktree, and refused for one that
-starts fresh.
+`run_not_bound` outside one, because it reads `OAT_RUN_ID` from the environment. A role that
+starts in an existing worktree needs one of two: `--from` runs it inside an existing
+Dispatch's worktree, and `--at` gives it a new worktree of its own at that commit (any
+branch, tag or commit id of the Run's repository, resolved when you fire it and reported as
+`at`), for work that no Dispatch's worktree holds, such as reviewing a whole epic branch.
+Both are refused for a role that starts fresh.
 
 A role can be limited in how many of its Dispatches run at once in one Run: the plugin's
 `role.toml` sets a default `max_concurrent`, and the repository overrides it in
@@ -83,7 +86,7 @@ Every failure is JSON on stderr with a stable `code` and a nonzero exit status. 
 `run_not_bound` / `dispatch_not_bound` (missing `--run`/`--dispatch` and no matching
 environment variable), `already_settled` (a second `dispatch done` or `meta finish`),
 `run_still_open` (`run clean` on an unfinished Run), `unknown_role`, `invalid_role_option` /
-`role_source_required` (`--from` misused), `skill_conflict` (a repository already has a
+`role_source_required` (`--from` or `--at` misused), `skill_conflict` (a repository already has a
 project-level skill of the name a role declares), `tmux_missing`.
 
 ## Claude Code workspace trust
