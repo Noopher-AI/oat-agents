@@ -1530,10 +1530,6 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
             Span::styled(format!("{mark} "), Style::new().fg(mark_color)),
             Span::styled(format!("{:<width$}", agent.hash_id, width = column), name),
             Span::styled(
-                format!("{:<10}", agent.role.clone().unwrap_or_else(|| "-".into())),
-                Style::new().fg(color),
-            ),
-            Span::styled(
                 // How long it has worked, which the clock beside it does not
                 // say: an agent that entered at 12:23 and one still going
                 // since 09:41 read the same otherwise.
@@ -1549,6 +1545,10 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
                 } else {
                     Color::DarkGray
                 }),
+            ),
+            Span::styled(
+                format!("{:<10}", agent.role.clone().unwrap_or_else(|| "-".into())),
+                Style::new().fg(color),
             ),
             Span::styled(
                 format!(
