@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="496" viewBox="0 0 960 496" role="img" aria-label="oat-agents: you write one Big Plan; oat-meta, a coordinator agent, delegates it to plugin roles, each in its own git worktree and tmux session, and reads their results from the Run inbox while you watch the workflow log.">
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; }
+    .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
+    .wire { fill: none; stroke: #30363d; stroke-width: 2; }
+    .wire.out { stroke: #d2a8ff; stroke-opacity: .35; stroke-dasharray: 6 6; animation: flow 1.2s linear infinite; }
+    .wire.back { stroke: #39c5cf; stroke-opacity: .35; stroke-dasharray: 6 6; animation: flow 1.2s linear infinite reverse; }
+    .wire.watch { stroke: #6e7681; stroke-dasharray: 2 6; }
+    @keyframes flow { to { stroke-dashoffset: -24; } }
+    .halo { transform-origin: 300px 250px; animation: halo 2.4s ease-out infinite; }
+    @keyframes halo { 0% { transform: scale(.85); opacity: .6; } 100% { transform: scale(1.5); opacity: 0; } }
+    .cursor { animation: blink 1s steps(1) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .lane .bar { transform-box: fill-box; transform-origin: left; animation: work 8s ease-in-out infinite; }
+    .l1 .bar { animation-delay: 0s; } .l2 .bar { animation-delay: -2.6s; } .l3 .bar { animation-delay: -5.2s; }
+    @keyframes work { 0% { transform: scaleX(.05); } 70% { transform: scaleX(1); } 100% { transform: scaleX(1); } }
+    .tick { opacity: 0; animation: tick 8s infinite; }
+    .l1 .tick { animation-delay: 0s; } .l2 .tick { animation-delay: -2.6s; } .l3 .tick { animation-delay: -5.2s; }
+    @keyframes tick { 0%, 69% { opacity: 0; } 72%, 100% { opacity: 1; } }
+  
+    .cap{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:20px}@keyframes c0{0%{opacity:1}33.32%{opacity:1}33.33%{opacity:0}100%{opacity:0}}.c0{opacity:0;animation:c0 8s infinite}@keyframes c1{0%{opacity:0}33.32%{opacity:0}33.33%{opacity:1}66.66%{opacity:1}66.67%{opacity:0}100%{opacity:0}}.c1{opacity:0;animation:c1 8s infinite}@keyframes c2{0%{opacity:0}66.66%{opacity:0}66.67%{opacity:1}99.99%{opacity:1}100.00%{opacity:0}100%{opacity:0}}.c2{opacity:0;animation:c2 8s infinite}
+    .rn{opacity:0;animation:rn 12s infinite}.r1{animation-delay:4s}.r2{animation-delay:8s}@keyframes rn{0%{opacity:0}2%{opacity:1}31%{opacity:1}33.3%{opacity:0}100%{opacity:0}}.r0{animation-name:rn0}@keyframes rn0{0%,31%{opacity:1}33.3%,97%{opacity:0}100%{opacity:1}}
+  </style>
+  <defs>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <path d="M24 0H0V24" fill="none" stroke="#161b22" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d1117" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0d1117"/>
+    </linearGradient>
+    <path id="p-plan" d="M178 250 C 220 250, 230 250, 262 250"/>
+    <path id="p-o1" d="M338 250 C 400 250, 410 160, 492 160"/>
+    <path id="p-o2" d="M338 250 C 400 250, 420 250, 492 250"/>
+    <path id="p-o3" d="M338 250 C 400 250, 410 340, 492 340"/>
+    <path id="p-b1" d="M752 176 C 800 176, 800 400, 600 400 L 360 400"/>
+    <path id="p-b2" d="M752 266 C 790 266, 790 400, 600 400 L 360 400"/>
+    <path id="p-b3" d="M752 356 C 780 356, 780 400, 600 400 L 360 400"/>
+    <path id="p-in" d="M300 382 L 300 290"/>
+    <g id="env">
+      <rect x="-9" y="-6.5" width="18" height="13" rx="2" fill="#0d1117" stroke="#39c5cf" stroke-width="1.6"/>
+      <path d="M-9 -6 L0 1 L9 -6" fill="none" stroke="#39c5cf" stroke-width="1.6"/>
+    </g>
+    <g id="pkt"><circle r="5" fill="#d2a8ff"/><circle r="10" fill="#d2a8ff" opacity=".18"/></g>
+  </defs>
+
+  <rect width="960" height="496" rx="16" fill="#0d1117"/>
+  <rect width="960" height="440" rx="16" fill="url(#grid)"/>
+  
+
+  <!-- title -->
+  <text x="40" y="70" font-size="44" font-weight="700" fill="#e6edf3">oat-agents</text>
+  <text x="322" y="70" font-size="16" fill="#6e7681">— Open Agent Team</text>
+  <text class="sans" x="40" y="106" font-size="19" fill="#c9d1d9">Write one <tspan fill="#e6edf3" font-weight="600">Big Plan</tspan>. A coordinator agent runs the team.</text>
+  <text class="sans" x="40" y="132" font-size="14" fill="#8b949e">One CLI · git worktrees · tmux · plain files.</text>
+
+  <!-- wires -->
+  <use href="#p-plan" class="wire out"/>
+  <use href="#p-o1" class="wire out"/>
+  <use href="#p-o2" class="wire out"/>
+  <use href="#p-o3" class="wire out"/>
+  <use href="#p-b1" class="wire back"/>
+  <use href="#p-b2" class="wire back"/>
+  <use href="#p-b3" class="wire back"/>
+  <use href="#p-in" class="wire back"/>
+  <path class="wire watch" d="M860 214 L 860 244"/>
+
+  <!-- Big Plan -->
+  <g transform="translate(40 200)">
+    <rect width="138" height="100" rx="10" fill="#161b22" stroke="#30363d"/>
+    <text x="14" y="26" font-size="13" font-weight="700" fill="#e6edf3">BIG PLAN</text>
+    <rect x="14" y="40" width="96" height="6" rx="3" fill="#30363d"/>
+    <rect x="14" y="54" width="110" height="6" rx="3" fill="#30363d"/>
+    <rect x="14" y="68" width="72" height="6" rx="3" fill="#30363d"/>
+    <text x="90" y="86" font-size="13" fill="#39c5cf" class="cursor">▍</text>
+  </g>
+
+  <!-- oat-meta -->
+  <circle class="halo" cx="300" cy="250" r="38" fill="none" stroke="#d2a8ff" stroke-width="2"/>
+  <circle cx="300" cy="250" r="38" fill="#1c1530" stroke="#d2a8ff" stroke-width="2"/>
+  <text x="300" y="247" font-size="13" font-weight="700" fill="#d2a8ff" text-anchor="middle">oat-meta</text>
+  <text x="300" y="264" font-size="10" fill="#8b949e" text-anchor="middle">coordinator</text>
+
+  <!-- Run inbox -->
+  <g transform="translate(248 382)">
+    <rect width="104" height="36" rx="8" fill="#0f2327" stroke="#39c5cf"/>
+    <text x="52" y="23" font-size="12" fill="#39c5cf" text-anchor="middle">Run inbox</text>
+  </g>
+
+  <!-- lanes -->
+  <g class="lane l1" transform="translate(492 136)">
+    <rect width="260" height="54" rx="10" fill="#161b22" stroke="#39c5cf" stroke-opacity=".6"/>
+    <text class="rn r0" x="14" y="22" font-size="13" font-weight="700" fill="#39c5cf">planner</text><text class="rn r1" x="14" y="22" font-size="13" font-weight="700" fill="#39c5cf">researcher</text><text class="rn r2" x="14" y="22" font-size="13" font-weight="700" fill="#39c5cf">architect</text>
+    <text x="110" y="22" font-size="11" fill="#6e7681">⎇ worktree · ▣ tmux</text>
+    <rect x="14" y="34" width="210" height="6" rx="3" fill="#21262d"/>
+    <rect class="bar" x="14" y="34" width="210" height="6" rx="3" fill="#39c5cf"/>
+    <text class="tick" x="234" y="41" font-size="13" fill="#3fb950">✓</text>
+  </g>
+  <g class="lane l2" transform="translate(492 226)">
+    <rect width="260" height="54" rx="10" fill="#161b22" stroke="#3fb950" stroke-opacity=".6"/>
+    <text class="rn r0" x="14" y="22" font-size="13" font-weight="700" fill="#3fb950">worker ×2</text><text class="rn r1" x="14" y="22" font-size="13" font-weight="700" fill="#3fb950">migrator ×4</text><text class="rn r2" x="14" y="22" font-size="13" font-weight="700" fill="#3fb950">implementer</text>
+    <text x="110" y="22" font-size="11" fill="#6e7681">⎇ worktree · ▣ tmux</text>
+    <rect x="14" y="34" width="210" height="6" rx="3" fill="#21262d"/>
+    <rect class="bar" x="14" y="34" width="210" height="6" rx="3" fill="#3fb950"/>
+    <text class="tick" x="234" y="41" font-size="13" fill="#3fb950">✓</text>
+  </g>
+  <g class="lane l3" transform="translate(492 316)">
+    <rect width="260" height="54" rx="10" fill="#161b22" stroke="#e3b341" stroke-opacity=".6"/>
+    <text class="rn r0" x="14" y="22" font-size="13" font-weight="700" fill="#e3b341">reviewer</text><text class="rn r1" x="14" y="22" font-size="13" font-weight="700" fill="#e3b341">tester</text><text class="rn r2" x="14" y="22" font-size="13" font-weight="700" fill="#e3b341">sec-auditor</text>
+    <text x="110" y="22" font-size="11" fill="#6e7681">⎇ worktree · ▣ pod</text>
+    <rect x="14" y="34" width="210" height="6" rx="3" fill="#21262d"/>
+    <rect class="bar" x="14" y="34" width="210" height="6" rx="3" fill="#e3b341"/>
+    <text class="tick" x="234" y="41" font-size="13" fill="#e3b341">★</text>
+  </g>
+  <text x="622" y="122" font-size="11" fill="#6e7681" text-anchor="middle">any roles your plugin defines</text>
+
+  <!-- you -->
+  <g transform="translate(800 150)">
+    <rect width="120" height="64" rx="10" fill="#161b22" stroke="#30363d"/>
+    <text x="60" y="26" font-size="13" font-weight="700" fill="#e6edf3" text-anchor="middle">you</text>
+    <text x="60" y="46" font-size="11" fill="#8b949e" text-anchor="middle">oat-agents tui</text>
+  </g>
+  <text x="860" y="262" font-size="10" fill="#6e7681" text-anchor="middle">reads the</text>
+  <text x="860" y="276" font-size="10" fill="#6e7681" text-anchor="middle">workflow log</text>
+
+  <!-- moving packets -->
+  <use href="#pkt"><animateMotion dur="2s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.5;1" calcMode="linear"><mpath href="#p-plan"/></animateMotion></use>
+  <use href="#pkt"><animateMotion dur="8s" begin="0s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.12;1" calcMode="linear"><mpath href="#p-o1"/></animateMotion></use>
+  <use href="#pkt"><animateMotion dur="8s" begin="-5.4s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.12;1" calcMode="linear"><mpath href="#p-o2"/></animateMotion></use>
+  <use href="#pkt"><animateMotion dur="8s" begin="-2.8s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.12;1" calcMode="linear"><mpath href="#p-o3"/></animateMotion></use>
+  <use href="#env"><animateMotion dur="8s" begin="-5.6s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;.72;.95;1" calcMode="linear"><mpath href="#p-b1"/></animateMotion></use>
+  <use href="#env"><animateMotion dur="8s" begin="-3.0s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;.72;.95;1" calcMode="linear"><mpath href="#p-b2"/></animateMotion></use>
+  <use href="#env"><animateMotion dur="8s" begin="-0.4s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;.72;.95;1" calcMode="linear"><mpath href="#p-b3"/></animateMotion></use>
+  <!-- caption -->
+  <path d="M0 440H960V480Q960 496 944 496H16Q0 496 0 480Z" fill="#161b22"/><rect x="0" y="440" width="960" height="1" fill="#30363d"/><rect x=".5" y=".5" width="959" height="495" rx="16" fill="none" stroke="#30363d"/>
+  <text class="cap c0" x="480" y="476" fill="#c9d1d9" text-anchor="middle">① You write one Big Plan; oat-meta delegates each step to the roles your plugin defines</text><text class="cap c1" x="480" y="476" fill="#c9d1d9" text-anchor="middle">② Each Dispatch gets its own git worktree and tmux session, and a pod if its role asks</text><text class="cap c2" x="480" y="476" fill="#c9d1d9" text-anchor="middle">③ Results return through the Run inbox; you watch the workflow log in the live view</text>
+</svg>
