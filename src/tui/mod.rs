@@ -32,6 +32,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::checklist::ChecklistStore;
+use crate::codex_session;
 use crate::environment::Environment;
 use crate::event_log::{self, EventLog, events};
 use crate::pricing::{self, Usage};
@@ -115,48 +116,81 @@ impl EventFilter {
 }
 
 /// What each transcript says, remembered so a large session file is parsed once rather
-/// than on every poll. A file is re-read only when its size or modification time changes.
+/// than on every poll. A session is re-read only when the size or modification time of one
+/// of its files changes.
 #[derive(Default)]
 pub struct SpendIndex {
-    seen: HashMap<PathBuf, (u64, i64, transcript::Session)>,
+    seen: HashMap<PathBuf, (Vec<(u64, i64)>, transcript::Session)>,
+    /// Where Codex keeps its session files, when it is reachable.
+    codex_root: Option<PathBuf>,
+    codex: codex_session::Locator,
+}
+
+fn stamp(path: &Path) -> (u64, i64) {
+    fs::metadata(path)
+        .map(|meta| {
+            (
+                meta.len(),
+                meta.modified()
+                    .ok()
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|since| since.as_secs() as i64)
+                    .unwrap_or_default(),
+            )
+        })
+        .unwrap_or_default()
 }
 
 impl SpendIndex {
-    pub fn of_file(&mut self, path: &Path) -> transcript::Session {
-        let stamp = fs::metadata(path)
-            .map(|meta| {
-                (
-                    meta.len(),
-                    meta.modified()
-                        .ok()
-                        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|since| since.as_secs() as i64)
-                        .unwrap_or_default(),
-                )
-            })
-            .unwrap_or_default();
-        if let Some((len, modified, session)) = self.seen.get(path) {
-            if (*len, *modified) == stamp {
+    pub fn new(codex_root: Option<PathBuf>) -> Self {
+        Self {
+            codex_root,
+            ..Self::default()
+        }
+    }
+
+    fn of_files(
+        &mut self,
+        paths: &[PathBuf],
+        read: impl FnOnce(&[PathBuf]) -> transcript::Session,
+    ) -> transcript::Session {
+        let Some(key) = paths.first() else {
+            return transcript::Session::default();
+        };
+        let stamps: Vec<_> = paths.iter().map(|path| stamp(path)).collect();
+        if let Some((seen, session)) = self.seen.get(key) {
+            if *seen == stamps {
                 return session.clone();
             }
         }
-        let session = transcript::session(path);
-        self.seen
-            .insert(path.to_owned(), (stamp.0, stamp.1, session.clone()));
+        let session = read(paths);
+        self.seen.insert(key.clone(), (stamps, session.clone()));
         session
     }
 
-    /// What one Dispatch has spent, from the newest transcript its backend keeps for its
+    pub fn of_file(&mut self, path: &Path) -> transcript::Session {
+        self.of_files(&[path.to_owned()], |paths| transcript::session(&paths[0]))
+    }
+
+    /// What one Dispatch has spent, from the newest session its backend keeps for its
     /// worktree.
     pub fn of_agent(
         &mut self,
         projects_root: Option<&Path>,
         agent: &AgentRow,
     ) -> transcript::Session {
-        let found = projects_root.zip(agent.worktree.as_deref()).and_then(|(root, worktree)| {
-            transcript::find_transcript(root, agent.agent.as_deref().unwrap_or_default(), worktree)
-        });
-        match found {
+        let Some(worktree) = agent.worktree.as_deref() else {
+            return transcript::Session::default();
+        };
+        let backend = agent.agent.as_deref().unwrap_or_default();
+        if matches!(backend.parse(), Ok(crate::role::Backend::Codex)) {
+            let Some(root) = self.codex_root.clone() else {
+                return transcript::Session::default();
+            };
+            let paths = self.codex.find(&root, worktree);
+            return self.of_files(&paths, codex_session::session);
+        }
+        match projects_root.and_then(|root| transcript::find_transcript(root, backend, worktree)) {
             Some(path) => self.of_file(&path),
             None => transcript::Session::default(),
         }
@@ -1661,12 +1695,14 @@ pub fn run(env: &dyn Environment) -> Result<()> {
     let checklist = ChecklistStore::open(env);
     let control = RealControl { env };
     let projects_root = transcript::claude_projects_dir(env);
+    let codex_root = codex_session::codex_sessions_dir(env);
     let mut terminal = enter()?;
     let outcome = event_loop(
         &mut terminal,
         &store,
         &log,
         projects_root,
+        codex_root,
         &control,
         Some(&checklist),
     );
@@ -1803,12 +1839,13 @@ fn event_loop(
     store: &Store,
     log: &EventLog,
     projects_root: Option<PathBuf>,
+    codex_root: Option<PathBuf>,
     control: &dyn Control,
     checklist_store: Option<&ChecklistStore>,
 ) -> Result<()> {
     let mut picker = Picker::new(model::run_summaries(store, log));
     let console_repo = std::env::current_dir().ok().map(|dir| console_target(&dir));
-    let mut usage = SpendIndex::default();
+    let mut usage = SpendIndex::new(codex_root);
     // Reading every Run's transcripts once fills the picker's costs; the index then re-reads
     // only what changes.
     let mut spend: HashMap<String, Usage> = HashMap::new();

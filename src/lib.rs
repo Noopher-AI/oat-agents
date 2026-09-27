@@ -1,4 +1,5 @@
 pub mod checklist;
+pub mod codex_session;
 pub mod commands;
 pub mod concurrency;
 pub mod console;

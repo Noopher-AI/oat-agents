@@ -4,7 +4,8 @@
 //! **Verified, not assumed** (ticket §4.4): this locates Claude Code's own session files under
 //! its `projects` directory; Codex keeps no equivalent per-worktree transcript on this
 //! backend's own disk layout, so a Codex-backed Dispatch has no transcript to read here and
-//! its liveness degrades to what the workflow log alone says. This is stated once, not
+//! its liveness degrades to what the workflow log alone says; its spend is read from Codex's
+//! own session files by `codex_session`. This is stated once, not
 //! invented as backend-independent anywhere in this crate.
 
 use crate::environment::Environment;

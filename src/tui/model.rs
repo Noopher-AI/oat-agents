@@ -116,7 +116,7 @@ impl AgentRow {
 
     /// What it was launched to run as — `gpt-5.5 high` — or, when its role left the model to
     /// the backend, the backend's name. The roster falls back to this where no transcript
-    /// says what the session actually runs on: a Codex session keeps none this crate reads.
+    /// says what the session actually runs on — none yet, or none this crate can find.
     pub fn launched_as(&self) -> String {
         match (self.model.as_deref(), self.effort.as_deref()) {
             (Some(model), Some(effort)) => format!("{model} {effort}"),

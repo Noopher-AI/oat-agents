@@ -82,19 +82,12 @@ pub fn build_for_run(env: &dyn Environment, store: &Store, run_id: &str) -> Resu
 }
 
 fn usage_for_dispatch(env: &dyn Environment, dispatch: &DispatchRecord) -> Option<Usage> {
-    let home = env.home_dir()?;
-    let projects_root = home.join(".claude").join("projects");
-    let slug: String = dispatch
-        .worktree
-        .chars()
-        .map(|c| if matches!(c, '/' | '.') { '-' } else { c })
-        .collect();
-    let project = projects_root.join(slug);
-    let newest = fs::read_dir(&project)
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("jsonl"))
-        .max_by_key(|p| fs::metadata(p).and_then(|m| m.modified()).ok())?;
+    if matches!(dispatch.backend.parse(), Ok(crate::role::Backend::Codex)) {
+        let root = crate::codex_session::codex_sessions_dir(env)?;
+        let paths = crate::codex_session::Locator::default().find(&root, &dispatch.worktree);
+        return (!paths.is_empty()).then(|| crate::codex_session::session(&paths).usage);
+    }
+    let projects_root = crate::transcript::claude_projects_dir(env)?;
+    let newest = crate::transcript::find_transcript(&projects_root, &dispatch.backend, &dispatch.worktree)?;
     Some(usage_from_transcript(&newest))
 }

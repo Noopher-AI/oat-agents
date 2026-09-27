@@ -414,6 +414,33 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
 }
 
 #[test]
+fn a_codex_reviewer_shows_the_tokens_and_cost_its_codex_session_recorded() {
+    let fx = fixture();
+    let codex = tempfile::tempdir().unwrap();
+    let day = codex.path().join("2026/09/26");
+    fs::create_dir_all(&day).unwrap();
+    let usage = serde_json::json!({"input_tokens": 1_000_000, "cached_input_tokens": 400_000,
+                                   "cache_write_input_tokens": 0, "output_tokens": 20_000});
+    let lines = [
+        serde_json::json!({"type": "session_meta", "payload": {"id": "s", "session_id": "s",
+            "cwd": "/repos/pottery.oat-glaze-reviewer", "source": "cli"}}),
+        serde_json::json!({"type": "turn_context", "payload": {"model": "gpt-6-sol", "effort": "xhigh"}}),
+        serde_json::json!({"type": "event_msg", "payload": {"type": "token_count", "info": {
+            "total_token_usage": usage, "last_token_usage": usage}}}),
+    ];
+    let rollout = lines.iter().map(ToString::to_string).collect::<Vec<_>>().join("\n");
+    fs::write(day.join("rollout-s.jsonl"), rollout).unwrap();
+
+    let mut state = fx.state();
+    let mut spend = SpendIndex::new(Some(codex.path().to_owned()));
+    state.refresh_spend(&mut spend);
+    let text = screen(160, 24, |frame| draw(frame, &mut state));
+    // 600k fresh + 400k cached + 20k out; $1.20 + $0.08 + $0.20 at gpt-6-sol's rates.
+    assert!(text.contains("1.0M    $1.48"), "{text}");
+    assert!(text.contains("gpt-6-sol xhigh"), "what the session ran on, not its launch:\n{text}");
+}
+
+#[test]
 fn selecting_a_dispatch_narrows_the_timeline_to_its_own_entries() {
     let fx = fixture();
     // A second Dispatch of the same role must not leak into the first one's timeline.

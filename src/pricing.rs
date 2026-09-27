@@ -2,8 +2,8 @@
 //! cost is computed from a snapshot of published rates. An unknown model reports tokens with
 //! no cost rather than guessing a number that would look authoritative and be wrong.
 //!
-//! This table necessarily names specific Claude models to price their tokens — a different
-//! concern from the launch path, which pins none (spec, *Settled decisions*: "the core pins
+//! This table necessarily names specific Claude and GPT models to price their tokens — a
+//! different concern from the launch path, which pins none (spec, *Settled decisions*: "the core pins
 //! no model"). Pricing a model it is told about is not choosing one.
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -17,15 +17,28 @@ const CACHE_WRITE_5M: f64 = 1.25;
 const CACHE_WRITE_1H: f64 = 2.0;
 const CACHE_READ: f64 = 0.1;
 
-/// Published rates as of 2026-06. Matching is by prefix so a dated snapshot id prices like its
-/// family.
+/// Published standard-tier rates, per million tokens. Matching is by prefix so a dated
+/// snapshot id prices like its family; a more specific prefix is listed before a shorter one
+/// it shares a start with.
+///
+/// Claude: Anthropic's rates as of 2026-06. GPT: OpenAI's short-context rates as of 2026-09
+/// (developers.openai.com/api/docs/pricing), where a cache write costs 1.25x input and a
+/// cached read 0.1x, as Claude's five-minute cache does. Codex caps a prompt below the
+/// long-context tier, so that tier is not priced. A Codex model with no published API rate —
+/// `codex-auto-review`, the model its guardian reviews run on — prices as unknown.
 pub fn rates(model: &str) -> Option<Rates> {
-    let table: [(&str, f64, f64, f64); 5] = [
+    let table: [(&str, f64, f64, f64); 11] = [
         ("claude-opus", 5.0, 25.0, CACHE_READ),
         ("claude-sonnet-5", 2.0, 10.0, CACHE_READ),
         ("claude-sonnet-4", 3.0, 15.0, CACHE_READ),
         ("claude-haiku-4", 1.0, 5.0, CACHE_READ),
-        ("gpt-", 2.0, 8.0, CACHE_READ),
+        ("gpt-6-astra", 10.0, 50.0, CACHE_READ),
+        ("gpt-6-sol", 2.0, 10.0, CACHE_READ),
+        ("gpt-6-luna", 0.10, 0.50, CACHE_READ),
+        ("gpt-5.6-sol", 4.0, 20.0, CACHE_READ),
+        ("gpt-5.6-terra", 2.0, 12.0, CACHE_READ),
+        ("gpt-5.6-luna", 0.20, 1.20, CACHE_READ),
+        ("gpt-5.5", 5.0, 30.0, CACHE_READ),
     ];
     table
         .iter()
@@ -39,16 +52,20 @@ pub fn rates(model: &str) -> Option<Rates> {
 
 const MILLION: u64 = 1_000_000;
 const TWO_HUNDRED_K: u64 = 200_000;
+const CODEX_WINDOW: u64 = 272_000;
 
 /// How much context a model holds, for turning a turn's input tokens into the share of the
 /// window they occupy.
 pub fn context_window(model: &str) -> Option<u64> {
-    let table: [(&str, u64); 5] = [
+    let table: [(&str, u64); 8] = [
         ("claude-opus-5", MILLION),
         ("claude-sonnet-5", MILLION),
         ("claude-sonnet-4", TWO_HUNDRED_K),
         ("claude-opus-4", TWO_HUNDRED_K),
         ("claude-haiku", TWO_HUNDRED_K),
+        ("gpt-6-", CODEX_WINDOW),
+        ("gpt-5.6-", CODEX_WINDOW),
+        ("gpt-5.5", CODEX_WINDOW),
     ];
     table
         .iter()
@@ -201,6 +218,23 @@ mod tests {
         assert_eq!(tokens.input, 10);
         assert_eq!(tokens.output, 18);
         assert!(usage.cost().is_some());
+    }
+
+    #[test]
+    fn a_gpt_model_prices_by_its_own_rates_and_an_unpublished_one_as_none() {
+        let tokens = Tokens {
+            input: 1_000_000,
+            output: 1_000_000,
+            cache_write_5m: 0,
+            cache_write_1h: 0,
+            cache_read: 1_000_000,
+        };
+        let cost = |model: &str| tokens.cost(model).unwrap();
+        assert!((cost("gpt-6-sol") - 12.2).abs() < 1e-9);
+        assert!((cost("gpt-5.6-terra") - 14.2).abs() < 1e-9);
+        assert!((cost("gpt-5.5") - 35.5).abs() < 1e-9);
+        assert!(rates("codex-auto-review").is_none());
+        assert!(rates("gpt-4o").is_none());
     }
 
     #[test]
