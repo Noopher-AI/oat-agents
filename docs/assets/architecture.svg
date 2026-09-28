@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="526" viewBox="0 0 960 526" role="img" aria-label="The core owns the mechanism: launching, worktrees, tmux sessions, the Run inbox, the workflow log, execution environments, the live view and the two core roles. A plugin is a directory of Markdown and TOML that owns how a team works: the example plugin's planner, worker and reviewer are 57 lines in all.">
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="526" viewBox="0 0 960 526" role="img" aria-label="The core owns the mechanism: launching, worktrees, tmux sessions, the Run inbox, the workflow log, execution environments, the live view and the two core roles. A plugin is a directory of Markdown and TOML that owns how a team works: the example plugin's planner, worker and reviewer are 89 lines in all.">
   <style>
     text { font-family: ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace; }
     .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; }
@@ -49,19 +49,19 @@
     <text x="554" y="120" fill="#e6edf3" font-weight="700">plugins/example/</text>
     <text x="554" y="146" class="f" style="animation-delay:0s">├─ oat-plugin.toml<tspan x="898" text-anchor="end" fill="#6e7681">3</tspan></text>
     <text x="554" y="170" fill="#c9d1d9">├─ core/</text>
-    <text x="554" y="192" class="f" style="animation-delay:.5s">│  ├─ oat-meta-instruction.md<tspan x="898" text-anchor="end" fill="#6e7681">6</tspan></text>
-    <text x="554" y="214" class="f" style="animation-delay:1s">│  └─ oat-console-instruction.md<tspan x="898" text-anchor="end" fill="#6e7681">4</tspan></text>
+    <text x="554" y="192" class="f" style="animation-delay:.5s">│  ├─ oat-meta-instruction.md<tspan x="898" text-anchor="end" fill="#6e7681">14</tspan></text>
+    <text x="554" y="214" class="f" style="animation-delay:1s">│  └─ oat-console-instruction.md<tspan x="898" text-anchor="end" fill="#6e7681">5</tspan></text>
     <text x="554" y="238" fill="#c9d1d9">├─ roles/</text>
-    <text x="554" y="260" class="f" font-size="12" style="animation-delay:1.5s">│  ├─ <tspan fill="#39c5cf">planner/</tspan>   role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">12</tspan></text>
-    <text x="554" y="282" class="f" font-size="12" style="animation-delay:2s">│  ├─ <tspan fill="#3fb950">worker/</tspan>    role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">13</tspan></text>
-    <text x="554" y="304" class="f" font-size="12" style="animation-delay:2.5s">│  ├─ <tspan fill="#e3b341">reviewer/</tspan>  role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">14</tspan></text>
+    <text x="554" y="260" class="f" font-size="12" style="animation-delay:1.5s">│  ├─ <tspan fill="#39c5cf">planner/</tspan>   role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">18</tspan></text>
+    <text x="554" y="282" class="f" font-size="12" style="animation-delay:2s">│  ├─ <tspan fill="#3fb950">worker/</tspan>    role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">21</tspan></text>
+    <text x="554" y="304" class="f" font-size="12" style="animation-delay:2.5s">│  ├─ <tspan fill="#e3b341">reviewer/</tspan>  role.toml · instructions.md<tspan x="898" text-anchor="end" fill="#6e7681">18</tspan></text>
     <text x="554" y="326" font-size="12" fill="#d2a8ff">│  └─ <tspan font-weight="700">any-role/</tspan>  <tspan fill="#8b949e">tester, sec-auditor, doc-writer…</tspan></text>
     <text x="554" y="350" fill="#c9d1d9">└─ skills/</text>
-    <text x="554" y="372" class="f" style="animation-delay:3s">   └─ branch-naming/SKILL.md<tspan x="898" text-anchor="end" fill="#6e7681">5</tspan></text>
+    <text x="554" y="372" class="f" style="animation-delay:3s">   └─ committing/SKILL.md<tspan x="898" text-anchor="end" fill="#6e7681">10</tspan></text>
   </g>
   <line x1="554" y1="388" x2="896" y2="388" stroke="#30363d"/>
   <text x="554" y="412" font-size="14" font-weight="700" fill="#d2a8ff">the example team</text>
-  <text x="898" y="412" font-size="14" font-weight="700" fill="#d2a8ff" text-anchor="end">57 lines</text>
+  <text x="898" y="412" font-size="14" font-weight="700" fill="#d2a8ff" text-anchor="end">89 lines</text>
   <text class="sans" x="554" y="430" font-size="11" fill="#6e7681">A new role is a new directory. No SDK, no code, no core edit.</text>
   <!-- caption -->
   <path d="M0 470H960V510Q960 526 944 526H16Q0 526 0 510Z" fill="#161b22"/><rect x="0" y="470" width="960" height="1" fill="#30363d"/><rect x=".5" y=".5" width="959" height="525" rx="16" fill="none" stroke="#30363d"/>
