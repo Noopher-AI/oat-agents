@@ -10,15 +10,15 @@
 
 <p align="center">
   <b>一個畫面看整個團隊，一個鍵接手任何一個 agent。</b><br>
-  由一個 meta-agent 把你的目標拆給一整隊 coding agent。每個 agent 都是它自己 CLI 的真實 session，
+  一個 meta-agent 把你的目標分給一整隊 coding agent。每個 agent 都是它自己那個 CLI 的真實 session，
   各在自己的 branch 上。你在同一個終端機裡看著所有人，隨時可以進去任何一個。
 </p>
 
 <p align="center">
   <a href="#為什麼">為什麼</a> ·
   <a href="#一個-run-怎麼跑">一個 Run 怎麼跑</a> ·
-  <a href="#你的團隊你的規則">你的團隊，你的規則</a> ·
-  <a href="#什麼在哪裡執行">什麼在哪裡執行</a> ·
+  <a href="#用-plugin-就能制定你的團隊與規則">用 Plugin 制定團隊與規則</a> ·
+  <a href="#執行環境與隔離">執行環境與隔離</a> ·
   <a href="#五個指令上手">開始使用</a>
 </p>
 
@@ -29,16 +29,16 @@
 
 ## 為什麼
 
-coding agent 早就能自己開 subagent。開一兩個還好；在一個真實的變更上開到五個，就很難跟上了。
+現在的 coding agent 大多能把工作分給 subagent 去做。分給一兩個還好；同一個變更要是分給五個，就很難跟得上了。
 
 <p align="center">
-  <img src="docs/assets/one-session.svg" alt="左邊：很多 agent 擠在同一個 session 裡，每個 subagent 都寫進同一個捲動紀錄，看不出誰卡住，也沒辦法進去任何一個。右邊：同一個團隊在 oat-agents 裡，一個 agent 一列、狀態一目了然，每個都是自己的 session、在自己的 branch 上，按 enter 就能接手任何一個。" width="100%">
+  <img src="docs/assets/one-session.svg" alt="左邊：很多 agent 擠在同一個 session 裡，每個 subagent 都寫進同一個捲動紀錄，看不出誰卡住，也沒辦法進去任何一個。右邊：同一個團隊在 oat-agents 裡，一個 agent 一列、每列都看得到狀態，每個都是自己的 session、在自己的 branch 上，按 enter 就能接手任何一個。" width="100%">
 </p>
 
 在同一個 session 裡，所有 subagent 的輸出都擠進同一個捲動紀錄。你看不出哪一個卡住了；某一個出錯時，你也沒辦法直接跟它說話，只能請上層的 agent 幫你轉達。
 
 oat-agents 把 subagent 從那個 session 裡拿出來。每個 agent 都跑在自己的 tmux session 裡，有自己的
-git worktree 和 branch，用的是那個 agent CLI 原本的互動介面。由一個 **meta-agent** 帶隊：它把你的目標拆成幾塊，每一塊交給一個 **member agent**。即時檢視把整個團隊放在同一個畫面上，一個 agent 一列。
+git worktree 和 branch，用的是那個 agent CLI 原本的互動介面。其中一個叫 meta-agent，負責帶隊：它把你的目標拆成幾塊，每一塊交給一個 member agent。即時檢視把整個團隊放在同一個畫面上，一個 agent 一列。
 
 agent 本身沒有另外一套新介面。選一個 agent 按 `enter`，你就是在它真正的 session 裡打字，跟你自己打開它沒有兩樣。按 `ctrl+]` 回到團隊。
 
@@ -50,24 +50,24 @@ agent 本身沒有另外一套新介面。選一個 agent 按 `enter`，你就�
 
 這是 `oat-agents tui`。畫面中的 Run 是示意，但版面、符號和按鍵都是真的。
 
-1. **你給它一個目標（goal）。** `oat-agents meta fire --prompt "…"` 會開始一個 Run。描述你要的結果，不是步驟。
-2. **meta-agent 拆分工作。** 它用 `role fire` 派出 member agent：一個 planner、兩個 worker、一個 reviewer，或是你的 plugin 定義的任何角色。程式碼不是它自己寫的。
-3. **member 用信件回報。** 做完的 member 把報告寄到 Run inbox（`dispatch done`）；卡住的 member 在那裡提問（`dispatch ask`），等 meta-agent 回覆。只有 meta-agent 會讀 inbox。
-4. **只在重要時刻問你。** meta-agent 遇到無法從目標判斷的決定時，它那一列會出現 🙋。選它、按 `enter`、打字回答。
-5. **失敗也會留下紀錄。** 審查沒過，修正會交給一個*新的* member agent。失敗的那次嘗試保有它的那一列、它的報告，以及它在 workflow log 裡的紀錄。
-6. **由你合併。** meta-agent 用 `meta finish` 結束 Run 並印出收據。成果就在這個 Run 的 `oat/<run>/…` branch 上，等你審查。
+1. 你用一個目標（goal）開始 Run：`oat-agents meta fire --prompt "…"`。寫你要的結果就好，步驟不用寫。
+2. meta-agent 用 `role fire` 派出 member agent：一個 planner、兩個 worker、一個 reviewer，或是你的 plugin 定義的任何角色。程式碼它自己不寫。
+3. member 透過 Run inbox 寫信給 meta-agent。做完的寄報告（`dispatch done`），卡住的提問（`dispatch ask`）並等回覆。inbox 只有 meta-agent 會讀。
+4. meta-agent 遇到光看目標決定不了的事，它那一列會出現 🙋。選它、按 `enter`，打字回答就行。其他時候它不會來問你。
+5. 審查沒過時，修正會交給一個*新的* member agent。失敗的那次嘗試還留著它那一列、它的報告，以及它在 workflow log 裡的紀錄。
+6. meta-agent 用 `meta finish` 結束 Run，並印出收據。成果在這個 Run 的 `oat/<run>/…` branch 上，由你審查、合併。
 
 要站多近由你決定。可以留在高處：看 roster、打開 meta-agent 的 checklist（`ctrl+l`），或直接問 meta-agent 進度如何。也可以下到任何一個 member，看它的 diff，直接跟它一起做。
 
-## 你的團隊，你的規則
+## 用 Plugin 就能制定你的團隊與規則
 
 <p align="center">
   <img src="docs/assets/architecture.svg" alt="plugin 是一個放 Markdown 和 TOML 的目錄：core/oat-meta-instruction.md 說明 meta-agent 怎麼拆分工作、何時要問你，roles/ 底下的每個目錄就是一種 member agent。核心對每個 plugin 都用同樣的方式啟動這個團隊：worktree、tmux session、Run inbox、workflow log、pod 和即時檢視。" width="100%">
 </p>
 
-你的團隊怎麼工作，寫在一個 **plugin** 裡：一個放 Markdown 和 TOML 的目錄。它決定有哪些角色、每個角色收到什麼指示、跑在哪個模型上，以及 meta-agent 該怎麼拆分工作、何時該問你。核心只提供機制，其他一概不管（ADR-0001、ADR-0004）。
+你的團隊怎麼工作，寫在 plugin 裡。plugin 就是一個放 Markdown 和 TOML 的目錄，它決定有哪些角色、每個角色收到什麼指示、跑在哪個模型上，以及 meta-agent 該怎麼拆分工作、何時該問你。核心只提供機制，其他一概不管（ADR-0001、ADR-0004）。
 
-範例 plugin 內建 `planner`、`worker` 和 `reviewer`，讓 oat-agents 第一天就能做點有用的事。**它們只是範例，不是固定的組合。** plugin 可以定義 `tester`、`security-auditor`、一次跑四個的 `migrator`，或是完全沒有 planner 的團隊。
+範例 plugin 內建 `planner`、`worker` 和 `reviewer`，讓 oat-agents 第一天就能做點有用的事。你的 plugin 可以留著它們、換掉它們，或加上 `tester`、`security-auditor`、一次跑四個的 `migrator`。完全沒有 planner 的團隊也可以。
 
 新增一個角色，就是一個放了兩個檔案的目錄：
 
@@ -120,14 +120,17 @@ oat-agents plugin list --repo .          # 會為每個 plugin 印出確切的 t
 所有 TOML 檔都會拒絕未知欄位，所以打錯字會在載入時就失敗，而不是被默默忽略。完整格式請見
 [`docs/plugins.md`](docs/plugins.md)。
 
-## 什麼在哪裡執行
+## 執行環境與隔離
 
-- **一支執行檔，沒有服務。** `oat-agents` 是單一的 Rust 執行檔。一個 Run 就是一些 branch、tmux session，以及 `~/.local/state/oat-agents/` 底下的純文字檔，其中包括一份只會附加寫入的 JSONL workflow log，可以直接 `tail -f`、`jq` 或 `grep`。沒有伺服器、資料庫或 daemon。
-- **每個 agent 都有自己的 session。** 每個 member agent 都有一個在自己 branch（`oat/<run>/<name>`）上的 worktree，以及 oat-agents 私有 tmux server 上的一個 session。`meta fire` 和 `role fire` 會印出 attach 進去的確切指令（`tmux -L oat attach -t oat_<…>`）。
-- **只有角色需要時才用 pod。** 設了 `exec_environment = true` 的角色，會在以你的 `.devcontainer/` 建置的 pod 裡（目前支援 Kubernetes）執行建置與測試指令，前提是這個 Run 有 execution profile。其他一切，包括 agent 本身，都留在你的機器上。即時檢視會在每個 agent 旁顯示 `pod:…`；如果某個角色要 pod 卻沒拿到，會以黃色顯示 `HOST (no pod)`。
-- **誠實回報驗證結果。** 角色協定規定：執行環境沒辦法跑的檢查要回報為*未驗證*，絕不能當成通過。
-- **agent 在無人看管下執行。** 沒有人在旁邊逐步核准，所以 oat-agents 啟動 agent CLI 時會關掉它的權限確認。worktree 讓每個 agent 的工作彼此分開，但不會限制 agent 能碰到什麼。請在你願意交給 agent 的機器和憑證下使用 oat-agents。
-- **Backend。** 目前支援 Claude Code 和 Codex，可以依角色選擇，所以同一個團隊可以混用。
+`oat-agents` 是單一的 Rust 執行檔，背後沒有伺服器、資料庫或 daemon。一個 Run 就是一些 branch、tmux session，以及 `~/.local/state/oat-agents/` 底下的純文字檔。workflow log 也在裡面，是一份只會往後附加的 JSONL 檔，可以直接 `tail -f`、`jq` 或 `grep`。
+
+每個 member agent 都有一個在自己 branch（`oat/<run>/<name>`）上的 worktree，以及 oat-agents 私有 tmux server 上的一個 session。`meta fire` 和 `role fire` 會印出 attach 進去的指令（`tmux -L oat attach -t oat_<…>`）。
+
+設了 `exec_environment = true` 的角色，會在用你的 `.devcontainer/` 建出來的 pod 裡（目前支援 Kubernetes）跑建置和測試指令，前提是這個 Run 有 execution profile。agent 本身和其他所有東西都留在你的機器上。即時檢視會在每個 agent 旁邊顯示 `pod:…`；要了 pod 卻沒拿到的角色，會以黃色顯示 `HOST (no pod)`。如果執行環境跑不了某項檢查，角色協定要求 agent 回報為*未驗證*，不能當成通過。
+
+agent 是在沒人看著的情況下執行的。沒有人在旁邊一步步核准，所以 oat-agents 啟動 agent CLI 時會關掉它的權限確認。worktree 只是把每個 agent 的工作分開，並不會限制 agent 能碰到什麼，所以請只在你放心交給 agent 的機器上、用你放心交給它的憑證來跑 oat-agents。
+
+目前支援的 backend 是 Claude Code 和 Codex。每個角色可以各選一個，所以同一個團隊可以混用。
 
 ## 五個指令上手
 
@@ -137,7 +140,7 @@ oat-agents plugin list --repo .          # 會為每個 plugin 印出確切的 t
 
 **你需要：** `git`、`tmux`、Rust 工具鏈（[rustup.rs](https://rustup.rs)，1.85 以上，用來建置），以及至少一個已安裝並登入的 agent CLI：Claude Code（預設）或 Codex。
 
-**1. 一行指令安裝，不必 clone。** 這支腳本會把原始碼抓到暫存目錄、建置、把 `oat-agents` 放進 `~/.local/bin`、安裝 `oat-agents-cli` skill（讓你自己的 coding agent 能幫你解說並操作 oat-agents），最後刪除暫存目錄。
+**1. 一行指令安裝。** 不必先 clone，這支腳本會把原始碼抓到暫存目錄、建置、把 `oat-agents` 放進 `~/.local/bin`、安裝 `oat-agents-cli` skill（讓你自己的 coding agent 能幫你解說並操作 oat-agents），最後刪除暫存目錄。
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Noopher-AI/oat-agents/main/install.sh | sh
@@ -173,7 +176,7 @@ oat-agents init --local
 oat-agents plugin trust embedded --name example
 ```
 
-**4. 用一個目標開始一個 Run。** 描述你要的結果，而不是步驟。目標比較長時用 `--input-file`，想讓 meta-agent 跑在 Codex 上就加 `--agent codex`。
+**4. 用一個目標開始一個 Run。** 寫你要的結果就好，不用寫步驟。目標比較長時用 `--input-file`，想讓 meta-agent 跑在 Codex 上就加 `--agent codex`。
 
 ```sh
 oat-agents meta fire --name rate-limit-login \

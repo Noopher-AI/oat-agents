@@ -18,8 +18,8 @@
 <p align="center">
   <a href="#why">Why</a> ·
   <a href="#how-a-run-goes">How a Run goes</a> ·
-  <a href="#your-team-your-rules">Your team, your rules</a> ·
-  <a href="#what-runs-where">What runs where</a> ·
+  <a href="#define-your-team-and-its-rules-with-a-plugin">Your team and its rules</a> ·
+  <a href="#execution-and-isolation">Execution and isolation</a> ·
   <a href="#get-started-in-five-commands">Get started</a>
 </p>
 
@@ -27,8 +27,8 @@
 
 ## Why
 
-Coding agents can already spawn subagents. That works for one or two. With five on a real
-change, it gets hard to follow.
+Most coding agents can already hand work off to subagents. That works for one or two. With
+five on a real change, it gets hard to follow.
 
 <p align="center">
   <img src="docs/assets/one-session.svg" alt="Left: many agents inside one session, where every subagent writes into the same scrollback, nobody's state is visible and none can be stepped into. Right: the same team in oat-agents, one row per agent with its state, each its own session on its own branch, and enter takes over any of them." width="100%">
@@ -39,9 +39,9 @@ one is stuck, and when one goes wrong you can't talk to it directly. All you can
 parent to pass a message along.
 
 oat-agents takes the subagents out of the session. Each agent runs in its own tmux session,
-with its own git worktree and branch, in the agent CLI's own interactive interface. A
-**meta-agent** leads: it splits your goal into pieces and hands each one to a **member
-agent**. The live view puts the whole team on one screen, one row per agent.
+with its own git worktree and branch, in the agent CLI's own interactive interface. One of
+them, the meta-agent, leads: it splits your goal into pieces and hands each piece to a member
+agent. The live view puts the whole team on one screen, one row per agent.
 
 There is no new UI for the agents themselves. When you select one and press `enter`, you're
 typing into its real session, the same as if you had opened it yourself. `ctrl+]` brings you
@@ -56,39 +56,39 @@ back to the team.
 That is `oat-agents tui`. The Run is illustrative, but the layout, glyphs and keys are the
 real ones.
 
-1. **You give it a goal.** `oat-agents meta fire --prompt "…"` starts a Run. Describe the
-   outcome you want, not the steps.
-2. **The meta-agent splits the work.** It launches member agents with `role fire`: a planner,
-   two workers, a reviewer, or whatever roles your plugin defines. It doesn't write the code
-   itself.
-3. **Members report by mail.** A member that finishes sends its report to the Run inbox
-   (`dispatch done`). One that is blocked asks a question there (`dispatch ask`) and waits for
-   the meta-agent's reply. Only the meta-agent reads the inbox.
-4. **You're asked only when it matters.** When the meta-agent needs a decision it can't make
-   from the goal, its row shows 🙋. Select it, press `enter`, type the answer.
-5. **A failure stays on record.** A failed review sends the fix to a *new* member agent. The
-   failed attempt keeps its row, its report and its place in the workflow log.
-6. **You merge.** The meta-agent closes the Run with `meta finish` and prints a receipt. The
-   work is on the Run's `oat/<run>/…` branches for you to review.
+1. You start a Run with a goal: `oat-agents meta fire --prompt "…"`. Describe the outcome you
+   want, not the steps.
+2. The meta-agent launches member agents with `role fire`: a planner, two workers, a
+   reviewer, or whatever roles your plugin defines. It doesn't write the code itself.
+3. Members write to the meta-agent through the Run inbox. One that finishes sends its report
+   (`dispatch done`); one that is blocked asks a question (`dispatch ask`) and waits for the
+   reply. Only the meta-agent reads the inbox.
+4. When the meta-agent needs a decision it can't make from the goal, its row shows 🙋. Select
+   it, press `enter` and type your answer. Otherwise it doesn't ask.
+5. When a review fails, the fix goes to a *new* member agent. The failed attempt keeps its row,
+   its report and its place in the workflow log.
+6. The meta-agent closes the Run with `meta finish` and prints a receipt. The work is on the
+   Run's `oat/<run>/…` branches, and you review and merge it.
 
 You choose how close to work. Stay at the top: read the roster, open the meta-agent's
 checklist (`ctrl+l`), or ask the meta-agent where things stand. Or go down to any member, read
 its diff, and work with it directly.
 
-## Your team, your rules
+## Define your team and its rules with a plugin
 
 <p align="center">
   <img src="docs/assets/architecture.svg" alt="A plugin is a directory of Markdown and TOML: core/oat-meta-instruction.md says how the meta-agent splits the work and when it asks you, and each directory under roles/ is one kind of member agent. The core launches that team the same way for every plugin: worktrees, tmux sessions, the Run inbox, the workflow log, pods and the live view." width="100%">
 </p>
 
-How your team works lives in a **plugin**: a directory of Markdown and TOML. It says which
+How your team works lives in a plugin, a directory of Markdown and TOML. It says which
 roles exist, what each one is told, which model it runs on, and how the meta-agent should
 split work and when it should ask you. The core supplies the mechanism and nothing else
 (ADR-0001, ADR-0004).
 
 The example plugin ships `planner`, `worker` and `reviewer` so oat-agents does something
-useful on day one. **They are an example, not a fixed set.** A plugin can define a `tester`,
-a `security-auditor`, a `migrator` that runs four at a time, or a team with no planner at all.
+useful on day one. Your plugin can keep them, replace them, or add a `tester`, a
+`security-auditor`, or a `migrator` that runs four at a time. A team with no planner at all
+works too.
 
 A new role is one directory with two files:
 
@@ -141,26 +141,30 @@ oat-agents plugin list --repo .          # prints the exact trust command for ea
 Every TOML file rejects unknown fields, so a typo fails at load time instead of being silently
 ignored. The full format is in [`docs/plugins.md`](docs/plugins.md).
 
-## What runs where
+## Execution and isolation
 
-- **One binary, no service.** `oat-agents` is a single Rust executable. A Run is branches, tmux
-  sessions and plain files under `~/.local/state/oat-agents/`, including an append-only JSONL
-  workflow log you can `tail -f`, `jq` or `grep`. There is no server, database or daemon.
-- **Every agent in its own session.** Each member agent gets a worktree on its own branch
-  (`oat/<run>/<name>`) and a tmux session on oat-agents' private tmux server. `meta fire` and
-  `role fire` print the exact command to attach to it (`tmux -L oat attach -t oat_<…>`).
-- **A pod only when a role needs one.** A role that sets `exec_environment = true` runs its
-  build and test commands in a pod built from your `.devcontainer/` (Kubernetes today), when
-  the Run has an execution profile. Everything else, the agent included, stays on your machine.
-  The live view shows `pod:…` beside every agent, or `HOST (no pod)` in yellow when a role
-  wanted a pod and didn't get one.
-- **Honest verification.** The role protocol says a check the environment could not run is
-  reported as *unverified*, never as a pass.
-- **Agents run unattended.** Nobody is there to approve each step, so oat-agents starts your
-  agent CLI with its permission prompts turned off. A worktree keeps each agent's work apart;
-  it doesn't limit what the agent can reach. Run oat-agents on a machine, and with credentials,
-  you'd trust an agent with.
-- **Backends.** Claude Code and Codex today, chosen per role, so one team can mix them.
+`oat-agents` is a single Rust executable, and there is no server, database or daemon behind
+it. A Run is branches, tmux sessions and plain files under `~/.local/state/oat-agents/`. That
+includes the workflow log, an append-only JSONL file you can `tail -f`, `jq` or `grep`.
+
+Each member agent gets a worktree on its own branch (`oat/<run>/<name>`) and a tmux session on
+oat-agents' private tmux server. `meta fire` and `role fire` print the command that attaches to
+it (`tmux -L oat attach -t oat_<…>`).
+
+A role that sets `exec_environment = true` runs its build and test commands in a pod built from
+your `.devcontainer/` (Kubernetes today), as long as the Run has an execution profile. The
+agent itself, and everything else, stays on your machine. The live view shows `pod:…` beside
+each agent, or `HOST (no pod)` in yellow when a role wanted a pod and didn't get one. If the
+environment couldn't run a check, the role protocol has the agent report it as *unverified*,
+never as a pass.
+
+Agents run unattended. Nobody is there to approve each step, so oat-agents starts your agent
+CLI with its permission prompts turned off. A worktree keeps each agent's work apart, but it
+doesn't limit what the agent can reach, so only run oat-agents on a machine and with
+credentials you'd trust an agent with.
+
+The supported backends today are Claude Code and Codex. You choose one per role, so a single
+team can mix them.
 
 ## Get started in five commands
 
@@ -172,7 +176,7 @@ ignored. The full format is in [`docs/plugins.md`](docs/plugins.md).
 build), and at least one agent CLI installed and logged in: Claude Code (the default) or
 Codex.
 
-**1. Install with one command, no clone needed.** The script fetches the source into a
+**1. Install with one command.** You don't need a clone: the script fetches the source into a
 temporary directory, builds it, puts `oat-agents` in `~/.local/bin`, installs the
 `oat-agents-cli` skill so your own coding agent can explain and drive oat-agents for you, and
 then deletes the temporary directory.
