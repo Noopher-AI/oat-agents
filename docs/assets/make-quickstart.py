@@ -20,10 +20,11 @@ STEPS=[
   "② Pin the repository's plugins; with no flags, the built-in example team"),
  ("oat-agents plugin trust embedded --name example", [("fg",'{ "source": "embedded", "trusted": true, "version": "0.1.0" }')],
   "③ Trust each plugin once per machine: its instructions steer your agents"),
- ('oat-agents meta fire --name rate-limit-login --prompt "Rate-limit the login endpoint"', [("fg",'{ "run_id": "rate-limit-login", "branch": "oat/rate-limit-login/meta", "backend": "claude", … }')],
-  "④ Fire a Run: oat-meta starts in its own worktree and tmux session"),
+ ('oat-agents meta fire --name rate-limit-login --prompt "Rate-limit the login endpoint"', [("fg",'{ "run_id": "rate-limit-login", "branch": "oat/rate-limit-login/meta", "backend": "claude",'),
+   ("fg",'  "attach": "tmux -L oat attach -t oat_meta-3c1e-rate-limit-login", … }')],
+  "④ Fire a Run with a goal: the meta-agent starts in its own worktree and tmux session"),
  ("oat-agents tui", [("cyan","▸ opening the live view…")],
-  "⑤ Watch every agent, answer oat-meta's questions, type into any session"),
+  "⑤ The whole team on one screen; press enter to take over any agent"),
 ]
 C={"bg":"#0d1117","fg":"#c9d1d9","dim":"#6e7681","green":"#3fb950","cyan":"#39c5cf","magenta":"#d2a8ff","white":"#e6edf3"}
 COLS=100
