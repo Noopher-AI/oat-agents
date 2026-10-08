@@ -17,8 +17,8 @@
 <p align="center">
   <a href="#為什麼">為什麼</a> ·
   <a href="#一個-run-怎麼跑">一個 Run 怎麼跑</a> ·
-  <a href="#你的團隊你的規則">你的團隊，你的規則</a> ·
-  <a href="#什麼在哪裡執行">什麼在哪裡執行</a> ·
+  <a href="#用-plugin-就能制定你的團隊與規則">用 Plugin 制定團隊與規則</a> ·
+  <a href="#執行環境與隔離">執行環境與隔離</a> ·
   <a href="#五個指令上手">開始使用</a>
 </p>
 
@@ -29,7 +29,7 @@
 
 ## 為什麼
 
-coding agent 早就能自己開 subagent。開一兩個還好；在一個真實的變更上開到五個，就很難跟上了。
+現在的 coding agent 大多能把工作分給 subagent 去做。分給一兩個還好；同一個變更要是分給五個，就很難跟得上了。
 
 <p align="center">
   <img src="docs/assets/one-session.svg" alt="左邊：很多 agent 擠在同一個 session 裡，每個 subagent 都寫進同一個捲動紀錄，看不出誰卡住，也沒辦法進去任何一個。右邊：同一個團隊在 oat-agents 裡，一個 agent 一列、每列都看得到狀態，每個都是自己的 session、在自己的 branch 上，按 enter 就能接手任何一個。" width="100%">
@@ -59,7 +59,7 @@ agent 本身沒有另外一套新介面。選一個 agent 按 `enter`，你就�
 
 要站多近由你決定。可以留在高處：看 roster、打開 meta-agent 的 checklist（`ctrl+l`），或直接問 meta-agent 進度如何。也可以下到任何一個 member，看它的 diff，直接跟它一起做。
 
-## 你的團隊，你的規則
+## 用 Plugin 就能制定你的團隊與規則
 
 <p align="center">
   <img src="docs/assets/architecture.svg" alt="plugin 是一個放 Markdown 和 TOML 的目錄：core/oat-meta-instruction.md 說明 meta-agent 怎麼拆分工作、何時要問你，roles/ 底下的每個目錄就是一種 member agent。核心對每個 plugin 都用同樣的方式啟動這個團隊：worktree、tmux session、Run inbox、workflow log、pod 和即時檢視。" width="100%">
@@ -120,7 +120,7 @@ oat-agents plugin list --repo .          # 會為每個 plugin 印出確切的 t
 所有 TOML 檔都會拒絕未知欄位，所以打錯字會在載入時就失敗，而不是被默默忽略。完整格式請見
 [`docs/plugins.md`](docs/plugins.md)。
 
-## 什麼在哪裡執行
+## 執行環境與隔離
 
 `oat-agents` 是單一的 Rust 執行檔，背後沒有伺服器、資料庫或 daemon。一個 Run 就是一些 branch、tmux session，以及 `~/.local/state/oat-agents/` 底下的純文字檔。workflow log 也在裡面，是一份只會往後附加的 JSONL 檔，可以直接 `tail -f`、`jq` 或 `grep`。
 

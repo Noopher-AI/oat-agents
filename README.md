@@ -18,8 +18,8 @@
 <p align="center">
   <a href="#why">Why</a> ·
   <a href="#how-a-run-goes">How a Run goes</a> ·
-  <a href="#your-team-your-rules">Your team, your rules</a> ·
-  <a href="#what-runs-where">What runs where</a> ·
+  <a href="#define-your-team-and-its-rules-with-a-plugin">Your team and its rules</a> ·
+  <a href="#execution-and-isolation">Execution and isolation</a> ·
   <a href="#get-started-in-five-commands">Get started</a>
 </p>
 
@@ -27,8 +27,8 @@
 
 ## Why
 
-Coding agents can already spawn subagents. That works for one or two. With five on a real
-change, it gets hard to follow.
+Most coding agents can already hand work off to subagents. That works for one or two. With
+five on a real change, it gets hard to follow.
 
 <p align="center">
   <img src="docs/assets/one-session.svg" alt="Left: many agents inside one session, where every subagent writes into the same scrollback, nobody's state is visible and none can be stepped into. Right: the same team in oat-agents, one row per agent with its state, each its own session on its own branch, and enter takes over any of them." width="100%">
@@ -74,7 +74,7 @@ You choose how close to work. Stay at the top: read the roster, open the meta-ag
 checklist (`ctrl+l`), or ask the meta-agent where things stand. Or go down to any member, read
 its diff, and work with it directly.
 
-## Your team, your rules
+## Define your team and its rules with a plugin
 
 <p align="center">
   <img src="docs/assets/architecture.svg" alt="A plugin is a directory of Markdown and TOML: core/oat-meta-instruction.md says how the meta-agent splits the work and when it asks you, and each directory under roles/ is one kind of member agent. The core launches that team the same way for every plugin: worktrees, tmux sessions, the Run inbox, the workflow log, pods and the live view." width="100%">
@@ -141,7 +141,7 @@ oat-agents plugin list --repo .          # prints the exact trust command for ea
 Every TOML file rejects unknown fields, so a typo fails at load time instead of being silently
 ignored. The full format is in [`docs/plugins.md`](docs/plugins.md).
 
-## What runs where
+## Execution and isolation
 
 `oat-agents` is a single Rust executable, and there is no server, database or daemon behind
 it. A Run is branches, tmux sessions and plain files under `~/.local/state/oat-agents/`. That
