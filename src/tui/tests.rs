@@ -619,6 +619,10 @@ fn a_finished_agent_has_its_timeline_and_its_log_which_says_where_it_ran() {
     assert!(text.contains("HOST (no pod): this Run has no execution profile"), "{text}");
     assert!(text.contains("outcome succeeded"), "{text}");
     assert!(text.contains("agent_exit"), "without a transcript the log's own record shows:\n{text}");
+    assert!(
+        text.contains("Codex keeps no transcript") && !text.contains("Claude Code"),
+        "a Codex agent is not told about Claude Code's sessions:\n{text}"
+    );
 
     let mut state = fx.state();
     select(&mut state, "worker");
@@ -870,5 +874,15 @@ fn every_key_is_listed_in_at_most_three_rows_no_wider_than_the_cap() {
     let text = screen(160, 30, |frame| draw(frame, &mut state));
     for key in ["enter type", "v/drag select", "←→ tab:live", "x close run", "ctrl+l checklist", "q quit"] {
         assert!(text.contains(key), "{key} missing:\n{text}");
+    }
+}
+
+#[test]
+fn the_no_transcript_note_names_the_agents_own_backend() {
+    assert_eq!(no_transcript_note(Some("claude"), true), "No transcript found for this worktree yet.");
+    assert_eq!(no_transcript_note(Some("claude"), false), "Claude Code's session directory is not reachable.");
+    for reachable in [true, false] {
+        assert!(no_transcript_note(Some("codex"), reachable).starts_with("Codex keeps no transcript"));
+        assert!(!no_transcript_note(None, reachable).contains("Claude Code"));
     }
 }

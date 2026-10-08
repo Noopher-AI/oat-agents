@@ -701,11 +701,9 @@ impl TuiState {
     pub fn detail_body(&self) -> Vec<Line<'static>> {
         let mut lines = self.detail_lines();
         if self.transcript.is_empty() {
+            let backend = self.selected_agent().and_then(|agent| agent.agent.as_deref());
             lines.push(Line::from(Span::styled(
-                match self.projects_root {
-                    Some(_) => "No transcript found for this worktree yet.",
-                    None => "Claude Code's session directory is not reachable.",
-                },
+                no_transcript_note(backend, self.projects_root.is_some()),
                 Style::new().fg(Color::DarkGray),
             )));
             lines.push(Line::raw(""));
@@ -2092,6 +2090,17 @@ fn event_loop(
                 }
             }
         }
+    }
+}
+
+/// Why the log page shows no transcript, in the words of the agent's own backend. Only Claude
+/// Code's transcripts are read here; a Codex agent's page falls back to the workflow log.
+fn no_transcript_note(backend: Option<&str>, claude_sessions_reachable: bool) -> &'static str {
+    match backend {
+        Some("claude") if claude_sessions_reachable => "No transcript found for this worktree yet.",
+        Some("claude") => "Claude Code's session directory is not reachable.",
+        Some("codex") => "Codex keeps no transcript this view can show; the workflow log follows.",
+        _ => "No transcript for this backend; the workflow log follows.",
     }
 }
 
