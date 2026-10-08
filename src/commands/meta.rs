@@ -9,6 +9,7 @@ use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
 use crate::launch::{self, LaunchSpec};
 use crate::plugins;
+use crate::session::tmux::Tmux;
 use crate::role::{Backend, CoreRole, RoleCatalog};
 use crate::store::{RunRecord, Store};
 use crate::worktree;
@@ -207,11 +208,14 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         (model.model.clone(), model.reasoning_effort.clone()),
     )?;
 
+    let session = Tmux::session_name(&dispatch.hash_id(&run_record));
     Ok(json!({
         "run_id": run_id,
         "dispatch_id": dispatch.id,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
+        "session": session,
+        "attach": Tmux::from_env(env).attach_command(&session),
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": exec.to_json(),
         "backend": run_record.backend,

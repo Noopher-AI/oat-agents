@@ -19,6 +19,10 @@ required. `--agent` picks the Run's backend; without it, the repository's `.oat/
 does (`backend` under `[oat-meta]`), then Claude Code. With no model set anywhere, a role runs
 on its backend's own default.
 
+Every agent runs on a private tmux server, so a plain `tmux attach` does not find it. `meta
+fire` and every launched `role fire` report the agent's tmux `session` and the exact `attach`
+command for it; the live view (`oat-agents tui`) reaches the same sessions without attaching.
+
 ## Delegating inside a Run
 
 `role fire <role> [--from <worktree> | --at <commit>] [--name <launch-name>] --prompt <text> |

@@ -102,6 +102,12 @@ fn meta_fire_creates_a_run_a_worktree_and_a_session() {
         new_session_call.contains("oat_meta-"),
         "session named after the meta hash_id: {new_session_call}"
     );
+    let session = result["session"].as_str().unwrap();
+    assert!(session.starts_with("oat_meta-") && new_session_call.contains(session), "{result}");
+    assert!(
+        result["attach"].as_str().unwrap().ends_with(&format!(" -L oat-test attach -t {session}")),
+        "the output says how to attach on the private server: {result}"
+    );
 
     // The goal is read back as the meta-agent was given it, under its old name too.
     for command in ["goal", "big-plan"] {
@@ -132,6 +138,9 @@ fn fresh_role_gets_its_own_child_worktree() {
     assert!(worktree.exists());
     assert!(worktree.to_string_lossy().contains(".oat-run-a-w1"));
     assert_eq!(result["branch"], "oat/run-a/w1");
+    let session = result["session"].as_str().unwrap();
+    assert!(session.starts_with("oat_worker-") && session.ends_with("-w1"), "{result}");
+    assert!(result["attach"].as_str().unwrap().ends_with(&format!("attach -t {session}")), "{result}");
 }
 
 #[test]

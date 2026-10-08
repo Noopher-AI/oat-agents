@@ -10,6 +10,7 @@ use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
 use crate::launch::{self, LaunchSpec};
 use crate::plugins::snapshot::catalog_from_snapshot;
+use crate::session::tmux::Tmux;
 use crate::role::{Backend, RoleCatalog, RoleDefinition, StartLocation};
 use crate::store::{MessageKind, RunRecord, Store};
 use crate::worktree;
@@ -387,6 +388,7 @@ fn launch(
         EnvBinding::NotWanted => {}
     }
 
+    let session = Tmux::session_name(&dispatch.hash_id(run_record));
     Ok(json!({
         "run_id": run_id,
         "dispatch_id": dispatch.id,
@@ -394,6 +396,8 @@ fn launch(
         "backend": dispatch.backend,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
+        "session": session,
+        "attach": Tmux::from_env(env).attach_command(&session),
         "at": request.at,
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": env_binding.to_json(),
