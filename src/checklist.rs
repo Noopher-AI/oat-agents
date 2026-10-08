@@ -63,7 +63,7 @@ pub enum ItemProgress {
         role: String,
         name: String,
         outcome: Option<String>,
-        /// Every one of them has been released: the coordinator has no further use for the
+        /// Every one of them has been released: the meta-agent has no further use for the
         /// work, so an unchecked item is likely one it forgot to check.
         all_released: bool,
         dispatches: usize,

@@ -12,18 +12,18 @@ first.
 
 **Never consume a Run inbox** — no `run wait`, `run ack`, or `run reply`. A Run inbox has
 exactly one consumer, that Run's `oat-meta`; a delivery is handed over once, and taking one out
-of the queue leaves that Run's coordinator waiting for a message that has already been
+of the queue leaves that Run's meta-agent waiting for a message that has already been
 consumed, with nothing left to time out and rescue it. Everything an inbox carries is also in
 the workflow log — read it from there instead.
 
 **Never release a Dispatch.** Releasing ends an agent's terminal, and removing its worktree
-deletes the only copy of its work. That is a coordinator's decision about a Dispatch it
+deletes the only copy of its work. That is the meta-agent's decision about a Dispatch it
 launched, not yours.
 
 **Never tear down an execution environment another agent is running commands inside.**
 
-**Never fire a role into a Run you do not own.** That Run has a coordinator; an agent
-delegated from outside it is one that Run's coordinator cannot read and cannot settle.
+**Never fire a role into a Run you do not own.** That Run has a meta-agent; an agent
+delegated from outside it is one that Run's meta-agent cannot read and cannot settle.
 
 **Never ask the operator through an interactive panel, menu, or option picker.** The operator
 reads you through the live view, not a terminal watching for a typed reply, and a panel

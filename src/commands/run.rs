@@ -15,9 +15,14 @@ use std::time::Duration;
 
 #[derive(Subcommand, Debug)]
 pub enum RunCommand {
+    /// Block for the next delivery from the Run inbox; on timeout, report each active
+    /// Dispatch's liveness. Only the meta-agent consumes the inbox.
     Wait(WaitArgs),
+    /// Acknowledge a delivery so it is not handed over again.
     Ack(AckArgs),
+    /// Answer one inbox message, unblocking the member agent's `dispatch ask`.
     Reply(ReplyArgs),
+    /// Remove a finished Run's worktrees, and the branches its base already contains.
     Clean(CleanArgs),
 }
 
@@ -83,7 +88,7 @@ fn wait(args: WaitArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) -> R
     let timeout = Duration::from_millis(args.timeout_ms);
     let poll = Duration::from_millis(500);
 
-    // A place may have come free while the coordinator was not waiting; a queued launch that
+    // A place may have come free while the meta-agent was not waiting; a queued launch that
     // fails lands in the inbox and so in this very wait.
     let mut started = queue_started(env, exec, &run_id);
     let delivery = store.wait_inbox(&run_id, timeout, poll)?;
@@ -190,7 +195,7 @@ fn reply(args: ReplyArgs, env: &dyn Environment) -> Result<Value> {
     Ok(json!({"run_id": run_id, "message": args.message}))
 }
 
-/// Removes every Dispatch worktree of one Run (including the coordinator's), and its branch
+/// Removes every Dispatch worktree of one Run (including the meta-agent's), and its branch
 /// once the base already contains it; a dirty worktree is kept with its reason (ticket §4.3).
 pub fn clean_run(env: &dyn Environment, store: &Store, run_id: &str, force: bool) -> Result<Value> {
     let log = EventLog::open(env);

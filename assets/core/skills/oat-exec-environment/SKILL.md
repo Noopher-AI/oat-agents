@@ -55,7 +55,7 @@ Call a failure known, pre-existing or environmental only by citing where the Run
 
 Then take one of the two paths above. If the task owns `.devcontainer/`, add what is missing, rebuild, re-run what the result depends on, and report the old and the new `image_id`. If it does not, report it as a blocker through the channel your role owns — `dispatch ask` for a role — with the exact command, its exit status and the error line, and keep working on whatever that does not block. Do not install it inside the container, do not run the command on the host, and do not drop the failing part from the command so that the rest passes.
 
-Either way, the report lists what stayed unverified: each command that failed for the environment's sake, and which part of what you were asked to verify it leaves unproven. The coordinator can then decide about it instead of discovering it later.
+Either way, the report lists what stayed unverified: each command that failed for the environment's sake, and which part of what you were asked to verify it leaves unproven. The meta-agent can then decide about it instead of discovering it later.
 
 ## Long commands
 

@@ -3,15 +3,17 @@
 
 use crate::environment::Environment;
 use crate::error::{codes, err};
-use crate::event_log::EventLog;
+use crate::event_log::{run_goal, EventLog};
 use crate::store::Store;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use serde_json::{json, Value};
 
 #[derive(Subcommand, Debug)]
-pub enum BigPlanCommand {
+pub enum GoalCommand {
+    /// The goal one Run was fired with.
     Show(ShowArgs),
+    /// Every Run's goal.
     List(ListArgs),
 }
 
@@ -36,40 +38,38 @@ fn resolve_run(run: &Option<String>, env: &dyn Environment, store: &Store) -> Re
         .ok_or_else(|| err(codes::RUN_NOT_BOUND, "no run bound and none found; pass --run"))
 }
 
-pub fn run(command: BigPlanCommand, env: &dyn Environment) -> Result<Value> {
+pub fn run(command: GoalCommand, env: &dyn Environment) -> Result<Value> {
     match command {
-        BigPlanCommand::Show(args) => show(args, env),
-        BigPlanCommand::List(args) => list(args, env),
+        GoalCommand::Show(args) => show(args, env),
+        GoalCommand::List(args) => list(args, env),
     }
 }
 
-fn big_plan_for(env: &dyn Environment, run_id: &str) -> Result<String> {
+fn goal_for(env: &dyn Environment, run_id: &str) -> Result<String> {
     let log = EventLog::open(env);
     for entry in log.read_run(run_id)? {
         if entry.event == crate::event_log::events::RUN_CREATED {
-            if let Some(details) = entry.details {
-                if let Some(text) = details.get("big_plan").and_then(|v| v.as_str()) {
-                    return Ok(text.to_string());
-                }
+            if let Some(goal) = entry.details.as_ref().and_then(run_goal) {
+                return Ok(goal.to_string());
             }
         }
     }
-    Err(err(codes::INVALID_INPUT, format!("no big plan recorded for run '{run_id}'")))
+    Err(err(codes::INVALID_INPUT, format!("no goal recorded for run '{run_id}'")))
 }
 
 fn show(args: ShowArgs, env: &dyn Environment) -> Result<Value> {
     let store = Store::open(env)?;
     let run_id = resolve_run(&args.run, env, &store)?;
-    let big_plan = big_plan_for(env, &run_id)?;
-    Ok(json!({"run_id": run_id, "big_plan": big_plan}))
+    let goal = goal_for(env, &run_id)?;
+    Ok(json!({"run_id": run_id, "goal": goal}))
 }
 
 fn list(_args: ListArgs, env: &dyn Environment) -> Result<Value> {
     let store = Store::open(env)?;
     let mut runs = Vec::new();
     for id in store.list_run_ids()? {
-        let big_plan = big_plan_for(env, &id).unwrap_or_default();
-        runs.push(json!({"run_id": id, "big_plan": big_plan}));
+        let goal = goal_for(env, &id).unwrap_or_default();
+        runs.push(json!({"run_id": id, "goal": goal}));
     }
     Ok(json!({"runs": runs}))
 }

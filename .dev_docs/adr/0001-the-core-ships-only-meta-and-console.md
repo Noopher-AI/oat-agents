@@ -19,7 +19,7 @@ workflow into the names and into the launch commands, and a team that divides wo
 differently still has to pretend it has those three roles.
 
 **Consequences.**
-- Launch commands and the coordinator's instructions cannot name plugin roles; they refer to
+- Launch commands and the meta-agent's instructions cannot name plugin roles; they refer to
   roles generically, and anything role-specific (such as launching a role inside another
   Dispatch's worktree) is a property a role declares, not a special case in the core.
 - A Run cannot start without plugins: a repository chooses them when it is initialised, and

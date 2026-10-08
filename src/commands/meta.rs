@@ -9,6 +9,7 @@ use crate::error::{codes, err};
 use crate::event_log::{events, now_iso, EventLog, LogEntry};
 use crate::launch::{self, LaunchSpec};
 use crate::plugins;
+use crate::session::tmux::Tmux;
 use crate::role::{Backend, CoreRole, RoleCatalog};
 use crate::store::{RunRecord, Store};
 use crate::worktree;
@@ -20,14 +21,19 @@ use std::str::FromStr;
 
 #[derive(Subcommand, Debug)]
 pub enum MetaCommand {
+    /// Start a Run from a goal: create the meta-agent's worktree and launch it in its own tmux
+    /// session.
     Fire(FireArgs),
+    /// Close a Run whose Dispatches are settled and released, and print its receipt.
     Finish(FinishArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct FireArgs {
+    /// The goal, as text.
     #[arg(long)]
     pub prompt: Option<String>,
+    /// A file holding the goal.
     #[arg(long)]
     pub input_file: Option<PathBuf>,
     #[arg(long, default_value = ".")]
@@ -64,7 +70,7 @@ pub fn run(command: MetaCommand, env: &dyn Environment, exec: &dyn ExecEnvironme
 }
 
 fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
-    let big_plan = crate::resolve_text_input(&args.prompt, &args.input_file)?;
+    let goal = crate::resolve_text_input(&args.prompt, &args.input_file)?;
     let repo = args
         .repo
         .canonicalize()
@@ -136,7 +142,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         plugins: plugin_records.clone(),
         meta_worktree: Some(path.to_string_lossy().to_string()),
         meta_dispatch_id: Some(dispatch_id.clone()),
-        big_plan: Some(big_plan.clone()),
+        goal: Some(goal.clone()),
         role_limits,
         role_settings: repo_roles.launch,
     };
@@ -148,7 +154,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         dispatch_id: None,
         agent: None,
         event: events::RUN_CREATED.to_string(),
-        details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "big_plan": big_plan})),
+        details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "goal": goal})),
     })?;
     log.record(&LogEntry {
         timestamp: now_iso(),
@@ -185,7 +191,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         backend,
         baseline: crate::launch::prompt::OAT_META_BASELINE.to_string(),
         instructions: vec![core_role.instructions.clone()],
-        task: big_plan,
+        task: goal,
         skills: core_role.skills.clone(),
         model: model.clone(),
         role_names_for_preamble: catalog.role_names(),
@@ -202,11 +208,14 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         (model.model.clone(), model.reasoning_effort.clone()),
     )?;
 
+    let session = Tmux::session_name(&dispatch.hash_id(&run_record));
     Ok(json!({
         "run_id": run_id,
         "dispatch_id": dispatch.id,
         "worktree": dispatch.worktree,
         "branch": dispatch.branch,
+        "session": session,
+        "attach": Tmux::from_env(env).attach_command(&session),
         "dispatch_dir": dispatch_dir.to_string_lossy(),
         "exec": exec.to_json(),
         "backend": run_record.backend,
@@ -347,7 +356,7 @@ fn finish(args: FinishArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) 
         "dropped_from_queue": dropped.iter().map(|entry| &entry.dispatch_id).collect::<Vec<_>>(),
     });
 
-    // The receipt above is what settles the Run; killing the coordinator's own tmux session
+    // The receipt above is what settles the Run; killing the meta-agent's own tmux session
     // is the last thing that happens, after cleanup is scheduled, never before.
     if let Some(dispatch_id) = &meta_dispatch_id {
         let tmux = crate::session::tmux::Tmux::from_env(env);

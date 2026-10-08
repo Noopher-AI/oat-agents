@@ -35,8 +35,9 @@ pub struct RunRecord {
     pub meta_worktree: Option<String>,
     #[serde(default)]
     pub meta_dispatch_id: Option<String>,
-    #[serde(default)]
-    pub big_plan: Option<String>,
+    /// What the Run was fired to do. Records written before the rename carry it as `big_plan`.
+    #[serde(default, alias = "big_plan")]
+    pub goal: Option<String>,
     /// How many Dispatches of each role may run at once, settled at `meta fire` from the
     /// plugins' defaults and `.oat/roles.toml`. A role not listed has no limit.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -83,7 +84,7 @@ pub struct DispatchRecord {
     #[serde(default)]
     pub released_at: Option<String>,
     /// What this Dispatch is for, as `role fire --name` gave it: the last part of its
-    /// hash_id. `None` for the coordinator, and for a launch that named nothing, which are
+    /// hash_id. `None` for the meta-agent, and for a launch that named nothing, which are
     /// then known by the Run's name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -100,7 +101,7 @@ impl DispatchRecord {
         self.settled.is_some()
     }
 
-    /// Its hash_id: the coordinator's under `meta`, every other role's under its own name,
+    /// Its hash_id: the meta-agent's under `meta`, every other role's under its own name,
     /// then what it was launched for. Every place that finds a Dispatch's session derives it
     /// here, so they cannot disagree.
     pub fn hash_id(&self, run: &RunRecord) -> String {
@@ -116,7 +117,10 @@ impl DispatchRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageKind {
-    WorkerDone,
+    /// A member agent settled its Dispatch; the message is its report. Inboxes written before
+    /// the rename carry it as `worker_done`.
+    #[serde(alias = "worker_done")]
+    MemberDone,
     Question,
     Escalation,
     /// A queued `role fire` that could not be launched when its place came free. Nobody is
@@ -436,7 +440,7 @@ impl Store {
         Ok(acked)
     }
 
-    /// Posts the coordinator's reply to one message, so its sender's `wait_reply` sees it.
+    /// Posts the meta-agent's reply to one message, so its sender's `wait_reply` sees it.
     pub fn reply_to_message(&self, run_id: &str, seq: u64, message: &str) -> Result<()> {
         // Confirms the message exists before writing a reply beside it.
         self.read_message(run_id, seq)?;
@@ -484,7 +488,7 @@ mod tests {
     #[test]
     fn an_undelivered_message_is_delivered_once_and_not_redelivered_after_ack() {
         let (_dir, store) = store();
-        store.append_inbox("run1", "dispatch1", MessageKind::WorkerDone, "done").unwrap();
+        store.append_inbox("run1", "dispatch1", MessageKind::MemberDone, "done").unwrap();
 
         let first = store
             .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
@@ -504,6 +508,26 @@ mod tests {
             .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
             .unwrap();
         assert!(third.is_none(), "an acknowledged delivery is not redelivered");
+    }
+
+    #[test]
+    fn a_message_written_as_worker_done_is_delivered_as_member_done() {
+        let (_dir, store) = store();
+        let dir = store.inbox_dir("run1");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("1.json"),
+            r#"{"seq": 1, "dispatch_id": "dispatch1", "kind": "worker_done", "message": "done",
+                "created_at": "2026-01-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+
+        let delivery = store
+            .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
+            .unwrap()
+            .expect("a delivery");
+        assert!(matches!(delivery.messages[0].kind, MessageKind::MemberDone));
+        assert_eq!(serde_json::to_value(&delivery.messages[0].kind).unwrap(), "member_done");
     }
 
     #[test]
@@ -538,12 +562,23 @@ mod tests {
             plugins: Vec::new(),
             meta_worktree: None,
             meta_dispatch_id: None,
-            big_plan: None,
+            goal: None,
             role_limits: Default::default(),
             role_settings: Default::default(),
         };
         store.create_run(&empty).unwrap();
         assert_eq!(store.load_run("r1").unwrap().plugins, Vec::new());
+
+        // A record written before the rename keeps its goal, and is saved under the new key.
+        let old: RunRecord = serde_json::from_value(serde_json::json!({
+            "id": "r0", "name": "r0", "repo": "/tmp/repo", "base_branch": "main",
+            "backend": "claude", "created_at": "2026-01-01T00:00:00Z", "big_plan": "Glaze every pot",
+        }))
+        .unwrap();
+        assert_eq!(old.goal.as_deref(), Some("Glaze every pot"));
+        let saved = serde_json::to_value(&old).unwrap();
+        assert_eq!(saved["goal"], "Glaze every pot");
+        assert!(saved.get("big_plan").is_none());
 
         let mut with_plugins = empty.clone();
         with_plugins.id = "r2".to_string();

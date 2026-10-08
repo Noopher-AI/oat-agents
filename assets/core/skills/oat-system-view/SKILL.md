@@ -1,6 +1,6 @@
 ---
 name: oat-system-view
-description: Read the whole fleet's state from the workflow log, the store, and each session's liveness, and tell a stuck Run from a slow one. Use before reporting on any Run you are not coordinating yourself.
+description: Read the whole fleet's state from the workflow log, the store, and each session's liveness, and tell a stuck Run from a slow one. Use before reporting on any Run you are not the meta-agent of.
 ---
 
 # Oat System View
@@ -14,7 +14,7 @@ description: Read the whole fleet's state from the workflow log, the store, and 
   deliveries, decisions, review verdicts. `--agent`, `--event`, `--since`, and `--limit` narrow
   it. **This is where you read what the inbox carried**, instead of touching the inbox.
 - `oat-agents log agents --run R` — one row per agent that has appeared in the Run's log.
-- `oat-agents big-plan show --run R` — the exact text the Run was fired with. When a Run's work
+- `oat-agents goal show --run R` — the exact text the Run was fired with. When a Run's work
   looks wrong, check it against what was actually asked before concluding anything.
 - `oat-agents checklist show --run R` — the Run's checklist, which items are checked, and
   under `progress` where the Dispatches linked to each item stand (`active`, `queued`,
@@ -74,10 +74,10 @@ of the last `needs-human` event before deciding whether it is still fresh.
 
 Each of these takes something from a Run that it cannot get back:
 
-- `run wait`, `run ack`, `run reply` — a Run's inbox is delivered once, to its own coordinator.
-  Consuming a delivery leaves that coordinator waiting forever for a message it will never be
+- `run wait`, `run ack`, `run reply` — a Run's inbox is delivered once, to its own meta-agent.
+  Consuming a delivery leaves that meta-agent waiting forever for a message it will never be
   told about. There is no recovery. Read the log instead.
 - `dispatch release` — ends someone's terminal; with `--remove-worktree` it deletes the only
   copy of their work.
-- Firing any role into a Run you do not own — that Run's coordinator can neither read nor settle
+- Firing any role into a Run you do not own — that Run's meta-agent can neither read nor settle
   an agent it did not launch.

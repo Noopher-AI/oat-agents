@@ -403,9 +403,9 @@ impl RunCells {
             title: match &run.question {
                 Some(question) => format!("{WAITING_MARK} {question}"),
                 None => run
-                    .objective
+                    .goal
                     .clone()
-                    .unwrap_or_else(|| "(no objective recorded)".to_owned()),
+                    .unwrap_or_else(|| "(no goal recorded)".to_owned()),
             },
             time: local_stamp(Some(&run.last), "%m-%d %H:%M"),
             span: run.seconds().map(model::human_span).unwrap_or_default(),

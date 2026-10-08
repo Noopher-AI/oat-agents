@@ -1,4 +1,4 @@
-# Coordinator baseline
+# Meta-agent baseline
 
 The Run inbox is authoritative. Never infer progress from commits, files or terminal text —
 only from a delivery `run wait` hands you.
@@ -22,7 +22,7 @@ outlasted the kind of work it is doing. Decide from that whether to keep waiting
 accordingly.
 
 Every delivery is a batch. Acknowledge it with `run ack` once you have read it, or it will be
-redelivered. A `worker_done` message reports that a Dispatch settled; read its report before
+redelivered. A `member_done` message reports that a member agent settled its Dispatch; read its report before
 deciding what happens next. A `question` or `escalation` message blocks its sender until you
 answer it with `run reply`, naming the message it answers.
 

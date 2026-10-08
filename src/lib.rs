@@ -41,12 +41,12 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum TopCommand {
-    /// The coordinator's own lifecycle.
+    /// The meta-agent's own lifecycle: start a Run from a goal, and finish it.
     Meta {
         #[command(subcommand)]
         command: commands::meta::MetaCommand,
     },
-    /// Launching a non-core role.
+    /// Launch a member agent: one Dispatch of a plugin role, from inside a Run.
     Role {
         #[command(subcommand)]
         command: commands::role::RoleCommand,
@@ -66,10 +66,11 @@ pub enum TopCommand {
         #[command(subcommand)]
         command: commands::log::LogCommand,
     },
-    /// The Big Plan a Run was fired with.
-    BigPlan {
+    /// The goal a Run was fired with.
+    #[command(alias = "big-plan")]
+    Goal {
         #[command(subcommand)]
-        command: commands::big_plan::BigPlanCommand,
+        command: commands::goal::GoalCommand,
     },
     /// The Run's checklist.
     Checklist {
@@ -140,7 +141,7 @@ pub fn execute_with_exec(
         TopCommand::Run { command } => commands::run::run(command, env, exec),
         TopCommand::Dispatch { command } => commands::dispatch::run(command, env, exec),
         TopCommand::Log { command } => commands::log::run(command, env),
-        TopCommand::BigPlan { command } => commands::big_plan::run(command, env),
+        TopCommand::Goal { command } => commands::goal::run(command, env),
         TopCommand::Checklist { command } => commands::checklist::run(command, env),
         TopCommand::Env { command } => {
             let log = event_log::EventLog::open(env);
@@ -161,5 +162,29 @@ mod tests {
     #[test]
     fn cli_definition_is_internally_consistent() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn every_subcommand_says_what_it_is_for() {
+        fn walk(command: &clap::Command, path: &str, missing: &mut Vec<String>) {
+            for sub in command.get_subcommands().filter(|sub| sub.get_name() != "help") {
+                let path = format!("{path} {}", sub.get_name());
+                if sub.get_about().is_none() {
+                    missing.push(path.clone());
+                }
+                walk(sub, &path, missing);
+            }
+        }
+        let mut missing = Vec::new();
+        walk(&Cli::command(), "oat-agents", &mut missing);
+        assert!(missing.is_empty(), "subcommands with no --help description: {missing:?}");
+    }
+
+    #[test]
+    fn big_plan_still_parses_as_goal_but_is_not_advertised() {
+        let cli = Cli::try_parse_from(["oat-agents", "big-plan", "list"]).unwrap();
+        assert!(matches!(cli.command, TopCommand::Goal { .. }));
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("goal") && !help.contains("big-plan"), "{help}");
     }
 }

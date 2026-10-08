@@ -1,6 +1,6 @@
 # Committing
 
-Commit on the branch your worktree is already on. The coordinator finds your work by that
+Commit on the branch your worktree is already on. The meta-agent finds your work by that
 branch, so never create, switch or rename a branch, and never push.
 
 - Commit only what the task needs; leave unrelated files as they were.

@@ -46,6 +46,12 @@ impl Tmux {
         self.run(&args).map(|_| ())
     }
 
+    /// The command a person runs to attach to one session on this private server. A plain
+    /// `tmux attach` looks on the default server and does not find it.
+    pub fn attach_command(&self, session: &str) -> String {
+        format!("{} -L {} attach -t {session}", self.command, self.socket)
+    }
+
     /// `oat_<hash_id>` with `.` and `:` replaced by `_`, since tmux treats both as separators.
     pub fn session_name(hash_id: &str) -> String {
         format!("oat_{}", hash_id.replace(['.', ':'], "_"))

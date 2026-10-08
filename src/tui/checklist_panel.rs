@@ -11,7 +11,7 @@
 //!
 //! An item linked to a Dispatch name carries that work's progress, read from the
 //! Run store on the same poll, so the panel moves as the work does, not only when
-//! the coordinator remembers to check something off.
+//! the meta-agent remembers to check something off.
 
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;

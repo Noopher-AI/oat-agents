@@ -15,10 +15,16 @@ use std::time::Duration;
 
 #[derive(Subcommand, Debug)]
 pub enum DispatchCommand {
+    /// Settle this Dispatch once, with an outcome and a report; the meta-agent receives it as
+    /// `member_done`.
     Done(DoneArgs),
+    /// Ask the meta-agent through the Run inbox and wait for its reply.
     Ask(AskArgs),
+    /// A Dispatch's record and whether its session is still alive.
     Show(ShowArgs),
+    /// A Dispatch's transcript or terminal screen.
     Read(ReadArgs),
+    /// End a Dispatch's session; with `--remove-worktree`, also remove its worktree.
     Release(ReleaseArgs),
 }
 
@@ -163,7 +169,7 @@ fn done(args: DoneArgs, env: &dyn Environment) -> Result<Value> {
     dispatch.report = Some(report.clone());
     store.save_dispatch(&dispatch)?;
 
-    store.append_inbox(&run_id, &dispatch_id, MessageKind::WorkerDone, &report)?;
+    store.append_inbox(&run_id, &dispatch_id, MessageKind::MemberDone, &report)?;
     log.record(&LogEntry {
         timestamp: now_iso(),
         run_id: run_id.clone(),

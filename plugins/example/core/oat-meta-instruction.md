@@ -1,6 +1,6 @@
 # Example team instructions for oat-meta
 
-When the Big Plan leaves the steps unclear, delegate to `planner` and get a plan before
+When the goal leaves the steps unclear, delegate to `planner` and get a plan before
 assigning any work; when it already names concrete steps, skip the planner.
 
 Delegate each piece of the plan to `worker`, firing pieces that do not depend on each other

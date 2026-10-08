@@ -143,7 +143,7 @@ fn entry(run_id: &str, dispatch_id: Option<&str>, agent: Option<&str>, event: &s
     }
 }
 
-/// Two Runs: an open one waiting on a person, whose coordinator, worker (in a pod) and
+/// Two Runs: an open one waiting on a person, whose meta-agent, worker (in a pod) and
 /// reviewer (on the host though it asked for a pod, and already settled) are on record; and
 /// a closed one that ran on the host.
 fn fixture() -> Fixture {
@@ -163,7 +163,7 @@ fn fixture() -> Fixture {
         plugins: Vec::new(),
         meta_worktree: None,
         meta_dispatch_id: Some("dispatch-0".to_string()),
-        big_plan: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
+        goal: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
         role_limits: Default::default(),
         role_settings: Default::default(),
     };
@@ -172,7 +172,7 @@ fn fixture() -> Fixture {
         .create_run(&RunRecord {
             id: CLOSED_RUN.to_string(),
             closed_at: Some(now_iso()),
-            big_plan: Some("Sweep the studio".to_string()),
+            goal: Some("Sweep the studio".to_string()),
             ..open.clone()
         })
         .unwrap();
@@ -325,7 +325,7 @@ fn the_picker_lists_every_run_with_its_title_its_pod_and_who_it_waits_on() {
         text.contains("which glaze?") && !text.contains("Glaze every pot"),
         "an open question outranks the title:\n{text}"
     );
-    assert!(text.contains("Sweep the studio"), "the Big Plan's first line is the title:\n{text}");
+    assert!(text.contains("Sweep the studio"), "the goal's first line is the title:\n{text}");
     assert!(text.contains("pod:gb10"), "{text}");
     assert!(text.contains("host"), "{text}");
     assert!(text.contains("enter open"), "{text}");
@@ -379,7 +379,7 @@ fn a_finished_run_can_be_cleaned_from_the_picker_and_an_open_one_cannot() {
 }
 
 #[test]
-fn the_coordinator_is_named_under_meta_as_its_launch_named_it() {
+fn the_meta_agent_is_named_under_meta_as_its_launch_named_it() {
     let fx = fixture();
     let state = fx.state();
     let meta = state.agents().iter().find(|agent| agent.is_meta()).unwrap();
@@ -408,7 +408,7 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
     );
     assert!(text.contains("succeeded at"), "a finished agent says how it ended:\n{text}");
     assert!(text.contains("finished"), "the rule separates live from finished:\n{text}");
-    assert!(text.contains(WAITING_MARK), "the coordinator that asked is marked:\n{text}");
+    assert!(text.contains(WAITING_MARK), "the meta-agent that asked is marked:\n{text}");
     assert!(text.contains(" timeline "), "{text}");
     assert!(text.contains("↑↓ agent"), "{text}");
     assert!(text.contains("e events:all"), "{text}");
@@ -619,6 +619,10 @@ fn a_finished_agent_has_its_timeline_and_its_log_which_says_where_it_ran() {
     assert!(text.contains("HOST (no pod): this Run has no execution profile"), "{text}");
     assert!(text.contains("outcome succeeded"), "{text}");
     assert!(text.contains("agent_exit"), "without a transcript the log's own record shows:\n{text}");
+    assert!(
+        text.contains("Codex keeps no transcript") && !text.contains("Claude Code"),
+        "a Codex agent is not told about Claude Code's sessions:\n{text}"
+    );
 
     let mut state = fx.state();
     select(&mut state, "worker");
@@ -870,5 +874,15 @@ fn every_key_is_listed_in_at_most_three_rows_no_wider_than_the_cap() {
     let text = screen(160, 30, |frame| draw(frame, &mut state));
     for key in ["enter type", "v/drag select", "←→ tab:live", "x close run", "ctrl+l checklist", "q quit"] {
         assert!(text.contains(key), "{key} missing:\n{text}");
+    }
+}
+
+#[test]
+fn the_no_transcript_note_names_the_agents_own_backend() {
+    assert_eq!(no_transcript_note(Some("claude"), true), "No transcript found for this worktree yet.");
+    assert_eq!(no_transcript_note(Some("claude"), false), "Claude Code's session directory is not reachable.");
+    for reachable in [true, false] {
+        assert!(no_transcript_note(Some("codex"), reachable).starts_with("Codex keeps no transcript"));
+        assert!(!no_transcript_note(None, reachable).contains("Claude Code"));
     }
 }

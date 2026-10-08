@@ -12,8 +12,11 @@ use std::str::FromStr;
 
 #[derive(Subcommand, Debug)]
 pub enum ConsoleCommand {
+    /// Open this repository's `oat-console`, or reuse the one already running.
     Open(OpenArgs),
+    /// Stop this repository's `oat-console`.
     Stop(RepoArgs),
+    /// Whether this repository's `oat-console` is open and alive.
     Status(RepoArgs),
 }
 
