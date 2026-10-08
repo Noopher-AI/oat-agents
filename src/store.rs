@@ -84,7 +84,7 @@ pub struct DispatchRecord {
     #[serde(default)]
     pub released_at: Option<String>,
     /// What this Dispatch is for, as `role fire --name` gave it: the last part of its
-    /// hash_id. `None` for the coordinator, and for a launch that named nothing, which are
+    /// hash_id. `None` for the meta-agent, and for a launch that named nothing, which are
     /// then known by the Run's name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -101,7 +101,7 @@ impl DispatchRecord {
         self.settled.is_some()
     }
 
-    /// Its hash_id: the coordinator's under `meta`, every other role's under its own name,
+    /// Its hash_id: the meta-agent's under `meta`, every other role's under its own name,
     /// then what it was launched for. Every place that finds a Dispatch's session derives it
     /// here, so they cannot disagree.
     pub fn hash_id(&self, run: &RunRecord) -> String {
@@ -440,7 +440,7 @@ impl Store {
         Ok(acked)
     }
 
-    /// Posts the coordinator's reply to one message, so its sender's `wait_reply` sees it.
+    /// Posts the meta-agent's reply to one message, so its sender's `wait_reply` sees it.
     pub fn reply_to_message(&self, run_id: &str, seq: u64, message: &str) -> Result<()> {
         // Confirms the message exists before writing a reply beside it.
         self.read_message(run_id, seq)?;

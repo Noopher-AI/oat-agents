@@ -1550,7 +1550,7 @@ pub fn draw(frame: &mut Frame, state: &mut TuiState) {
         "all agents",
         Style::new().fg(Color::Gray),
     )))];
-    // The coordinator is the one who asks, so its row is where a reader is
+    // The meta-agent is the one who asks, so its row is where a reader is
     // sent to read the question in full and answer it.
     let waiting = state.open_question().is_some();
     let now = Instant::now();

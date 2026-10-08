@@ -1,10 +1,10 @@
 # Role protocol
 
-You were launched by the coordinator of this Run; this session is the role named in the
+You are a member agent, launched by the meta-agent of this Run; this session is the role named in the
 launch above, for exactly one Dispatch. Use the exact Run and Dispatch identifiers the CLI
 returned to you — never guess or reuse one from another session.
 
-The Run inbox is authoritative. If you need the coordinator's input, ask through it with
+The Run inbox is authoritative. If you need the meta-agent's input, ask through it with
 `dispatch ask` and keep working on whatever the answer does not block; never ask through an
 interactive panel, menu or option picker — nobody is watching this terminal to answer one,
 and its input cannot reach you.

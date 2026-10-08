@@ -90,7 +90,7 @@ fn meta_fire_creates_a_run_a_worktree_and_a_session() {
     assert_eq!(run_id, "glaze");
 
     let worktree = std::path::PathBuf::from(result["worktree"].as_str().unwrap());
-    assert!(worktree.exists(), "the coordinator's worktree was created");
+    assert!(worktree.exists(), "the meta-agent's worktree was created");
     assert_eq!(result["branch"], "oat/glaze/meta");
 
     let calls = world.tmux_calls();
@@ -418,7 +418,7 @@ fn a_run_goes_from_delegation_to_finish() {
     let dispatch_id = role_result["dispatch_id"].as_str().unwrap().to_string();
 
     // The worker asks a question; this blocks, so it runs on its own thread while the
-    // coordinator answers it with `run reply`.
+    // meta-agent answers it with `run reply`.
     let worker_env_for_ask = world.env()
         .with_var("OAT_RUN_ID", &run_id)
         .with_var("OAT_DISPATCH_ID", &dispatch_id);
@@ -428,7 +428,7 @@ fn a_run_goes_from_delegation_to_finish() {
         execute(ask_cli, &worker_env_for_ask, &catalog_for_thread).unwrap()
     });
 
-    // The coordinator receives the question through its own `run wait`, acknowledges the
+    // The meta-agent receives the question through its own `run wait`, acknowledges the
     // delivery, and only then replies to it — the Run inbox is how it learns the message id.
     std::thread::sleep(std::time::Duration::from_millis(200));
     let wait_for_question = parse(&["run", "wait", "--run", &run_id, "--ack", "--timeout-ms", "5000"]);
@@ -453,13 +453,13 @@ fn a_run_goes_from_delegation_to_finish() {
     let done_cli = parse(&["dispatch", "done", "--report", "shipped the glaze"]);
     run_json(done_cli, &worker_env, &catalog);
 
-    // The coordinator waits again, receives the member_done delivery, and acknowledges it.
+    // The meta-agent waits again, receives the member_done delivery, and acknowledges it.
     let wait_cli = parse(&["run", "wait", "--run", &run_id, "--ack", "--timeout-ms", "5000"]);
     let wait_result = run_json(wait_cli, &meta_env, &catalog);
     assert_eq!(wait_result["timed_out"], false);
     assert_eq!(wait_result["messages"][0]["kind"], "member_done");
 
-    // The coordinator releases the Dispatch and its worktree, then finishes the Run.
+    // The meta-agent releases the Dispatch and its worktree, then finishes the Run.
     let release_cli = parse(&["dispatch", "release", "--dispatch", &dispatch_id, "--run", &run_id, "--remove-worktree", "--force"]);
     run_json(release_cli, &meta_env, &catalog);
 

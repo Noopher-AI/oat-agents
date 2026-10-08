@@ -78,7 +78,7 @@ fn the_repository_chooses_a_roles_backend_and_model_over_the_plugin_and_the_run(
 }
 
 #[test]
-fn the_repository_chooses_the_coordinators_backend_and_model_when_meta_fire_names_none() {
+fn the_repository_chooses_the_meta_agents_backend_and_model_when_meta_fire_names_none() {
     let repo = TempRepo::new();
     let world = TestWorld::new();
     install_plugin(&world, &repo.path());

@@ -67,7 +67,7 @@ impl EnvStore {
         self.dir.join(format!("run-{}.json", super::sanitize(run_id)))
     }
 
-    /// The profile a Run was launched with. Role launches inherit it, so a coordinator cannot
+    /// The profile a Run was launched with. Role launches inherit it, so a meta-agent cannot
     /// accidentally put one role somewhere else by forgetting a flag.
     pub fn save_run_profile(&self, run_id: &str, profile: &str) -> Result<()> {
         fs::create_dir_all(&self.dir).with_context(|| format!("failed to create {}", self.dir.display()))?;

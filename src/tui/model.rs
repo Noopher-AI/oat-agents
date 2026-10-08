@@ -112,7 +112,7 @@ impl AgentRow {
         Some((end - started).max(0))
     }
 
-    /// The coordinator, the one Dispatch that asks a person anything.
+    /// The meta-agent, the one Dispatch that asks a person anything.
     pub fn is_meta(&self) -> bool {
         matches!(self.role.as_deref(), Some(role) if role == CoreRole::Meta.name() || role == "meta")
     }
@@ -166,7 +166,7 @@ pub struct RunSummary {
 }
 
 impl RunSummary {
-    /// A Run runs until its coordinator finishes it.
+    /// A Run runs until its meta-agent finishes it.
     pub fn running(&self) -> bool {
         self.open
     }
@@ -267,7 +267,7 @@ pub fn run_summaries(store: &Store, log: &EventLog) -> Vec<RunSummary> {
         .collect()
 }
 
-/// The Dispatch's hash_id, derived the way the launch derived it: the coordinator's under
+/// The Dispatch's hash_id, derived the way the launch derived it: the meta-agent's under
 /// `meta`, every other role's under its own name.
 pub fn dispatch_hash(run: &RunRecord, dispatch: &DispatchRecord) -> String {
     dispatch.hash_id(run)

@@ -10,7 +10,7 @@
 //!
 //! A Dispatch holds one of its role's places from launch until it is settled or released. A
 //! `role fire` that finds no free place is written to `<run>/queue/<seq>.json` and launched,
-//! in order, by the next coordinator command that finds one free.
+//! in order, by the next meta-agent command that finds one free.
 
 use crate::error::{codes, err};
 use crate::role::repository::RepoRoles;
@@ -37,7 +37,7 @@ pub fn resolve_limits(repo: &RepoRoles, catalog: &dyn RoleCatalog) -> Result<BTr
 }
 
 /// Everything `role fire` was given, kept until a place is free. The Dispatch's id is chosen
-/// when it is queued, so the coordinator can name it before it starts.
+/// when it is queued, so the meta-agent can name it before it starts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuedFire {
     pub seq: u64,

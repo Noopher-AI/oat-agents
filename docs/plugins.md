@@ -134,7 +134,7 @@ field, a limit of `0` or a limit on a core role refuses the Run with `role_limit
 an unknown backend with `role_settings_invalid`, before anything is created. A repository cannot
 lift a plugin's limit to "none"; it can only set a number.
 
-A `role fire` over the limit answers `"queued": true` with the Dispatch's id. The coordinator's
+A `role fire` over the limit answers `"queued": true` with the Dispatch's id. The meta-agent's
 own `run wait`, `dispatch release` and `role fire` start queued launches, oldest first, as
 places come free, and the workflow log records `dispatch_queued`, `dispatch_dequeued`,
 `queued_launch_failed` and `dispatch_dropped` (a launch still queued when the Run finishes).

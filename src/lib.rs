@@ -41,7 +41,7 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum TopCommand {
-    /// The coordinator's own lifecycle.
+    /// The meta-agent's own lifecycle.
     Meta {
         #[command(subcommand)]
         command: commands::meta::MetaCommand,

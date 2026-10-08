@@ -28,7 +28,7 @@ pub fn sanitize_segment(input: &str) -> String {
     }
 }
 
-/// `oat/<run-name>/meta` for the coordinator, `oat/<run-name>/<launch>` for a child.
+/// `oat/<run-name>/meta` for the meta-agent, `oat/<run-name>/<launch>` for a child.
 pub fn branch_name(run_name: &str, launch: &str) -> String {
     format!("oat/{}/{}", sanitize_segment(run_name), sanitize_segment(launch))
 }

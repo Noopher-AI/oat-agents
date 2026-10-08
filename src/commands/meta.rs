@@ -347,7 +347,7 @@ fn finish(args: FinishArgs, env: &dyn Environment, exec: &dyn ExecEnvironments) 
         "dropped_from_queue": dropped.iter().map(|entry| &entry.dispatch_id).collect::<Vec<_>>(),
     });
 
-    // The receipt above is what settles the Run; killing the coordinator's own tmux session
+    // The receipt above is what settles the Run; killing the meta-agent's own tmux session
     // is the last thing that happens, after cleanup is scheduled, never before.
     if let Some(dispatch_id) = &meta_dispatch_id {
         let tmux = crate::session::tmux::Tmux::from_env(env);

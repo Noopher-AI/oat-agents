@@ -1,4 +1,4 @@
-# Coordinator baseline
+# Meta-agent baseline
 
 The Run inbox is authoritative. Never infer progress from commits, files or terminal text —
 only from a delivery `run wait` hands you.

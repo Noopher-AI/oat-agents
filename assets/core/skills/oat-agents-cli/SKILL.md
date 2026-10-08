@@ -1,6 +1,6 @@
 ---
 name: oat-agents-cli
-description: Guide a human through starting, observing, and taking over an oat-agents Run — git worktrees, tmux sessions, and the file-based Run inbox. Use when the user asks how to use oat-agents, wants to launch a Big Plan with meta fire, inspect a Dispatch, or handle Run inbox lifecycle commands.
+description: Guide a human through starting, observing, and taking over an oat-agents Run — git worktrees, tmux sessions, and the file-based Run inbox. Use when the user asks how to use oat-agents, wants to start a Run from a goal with meta fire, inspect a Dispatch, or handle Run inbox lifecycle commands.
 ---
 
 # oat-agents CLI
@@ -10,10 +10,10 @@ commands a human uses to start, observe and take over a Run.
 
 ## Starting a Run
 
-`oat-agents meta fire --prompt "<the Big Plan>" [--repo <path>] [--name <run-name>]
+`oat-agents meta fire --prompt "<the goal>" [--repo <path>] [--name <run-name>]
 [--base-branch <branch>] [--agent claude|codex] [--trust-workspace]`
 
-This is the human entry point: it creates the Run, the coordinator's (`oat-meta`) worktree
+This is the human entry point: it creates the Run, the meta-agent's (`oat-meta`) worktree
 and branch, and launches its tmux session. Exactly one of `--prompt` or `--input-file` is
 required. `--agent` picks the Run's backend; without it, the repository's `.oat/roles.toml`
 does (`backend` under `[oat-meta]`), then Claude Code. With no model set anywhere, a role runs
@@ -22,7 +22,7 @@ on its backend's own default.
 ## Delegating inside a Run
 
 `role fire <role> [--from <worktree> | --at <commit>] [--name <launch-name>] --prompt <text> |
---input-file <path>` belongs to the coordinator's own session — it fails with
+--input-file <path>` belongs to the meta-agent's own session — it fails with
 `run_not_bound` outside one, because it reads `OAT_RUN_ID` from the environment. A role that
 starts in an existing worktree needs one of two: `--from` runs it inside an existing
 Dispatch's worktree, and `--at` gives it a new worktree of its own at that commit (any
@@ -52,15 +52,15 @@ reports the backend it got. What a Run settled is in `meta fire`'s output under
 - `log show [--run <id>] [--agent <name>] [--event <name>] [--since <ts>] [--limit <n>]
   [--format text|json]`, `log agents`, `log runs` — the workflow log, the one place an
   observer reads a Run from.
-- `big-plan show [--run <id>]`, `big-plan list` — the Big Plan a Run was fired with.
+- `goal show [--run <id>]`, `goal list` — the goal a Run was fired with.
 
 None of these consume the Run inbox. **The Run inbox has exactly one consumer: that Run's
-`oat-meta`.** Taking a delivery from it as an observer leaves the coordinator waiting for a
+`oat-meta`.** Taking a delivery from it as an observer leaves the meta-agent waiting for a
 message that is already gone.
 
 ## Taking over the Run inbox
 
-Only do this in place of the coordinator, deliberately — for example when it has stalled and
+Only do this in place of the meta-agent, deliberately — for example when it has stalled and
 you are stepping in:
 
 - `run wait --run <id> [--ack] [--timeout-ms <ms>]` — blocks for the next delivery; on

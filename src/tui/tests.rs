@@ -143,7 +143,7 @@ fn entry(run_id: &str, dispatch_id: Option<&str>, agent: Option<&str>, event: &s
     }
 }
 
-/// Two Runs: an open one waiting on a person, whose coordinator, worker (in a pod) and
+/// Two Runs: an open one waiting on a person, whose meta-agent, worker (in a pod) and
 /// reviewer (on the host though it asked for a pod, and already settled) are on record; and
 /// a closed one that ran on the host.
 fn fixture() -> Fixture {
@@ -379,7 +379,7 @@ fn a_finished_run_can_be_cleaned_from_the_picker_and_an_open_one_cannot() {
 }
 
 #[test]
-fn the_coordinator_is_named_under_meta_as_its_launch_named_it() {
+fn the_meta_agent_is_named_under_meta_as_its_launch_named_it() {
     let fx = fixture();
     let state = fx.state();
     let meta = state.agents().iter().find(|agent| agent.is_meta()).unwrap();
@@ -408,7 +408,7 @@ fn the_run_view_names_every_dispatch_where_it_runs_and_the_keys() {
     );
     assert!(text.contains("succeeded at"), "a finished agent says how it ended:\n{text}");
     assert!(text.contains("finished"), "the rule separates live from finished:\n{text}");
-    assert!(text.contains(WAITING_MARK), "the coordinator that asked is marked:\n{text}");
+    assert!(text.contains(WAITING_MARK), "the meta-agent that asked is marked:\n{text}");
     assert!(text.contains(" timeline "), "{text}");
     assert!(text.contains("↑↓ agent"), "{text}");
     assert!(text.contains("e events:all"), "{text}");

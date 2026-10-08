@@ -187,7 +187,7 @@ struct Drained {
 }
 
 /// Launches every queued `role fire` whose role has a free place, oldest first. Run from the
-/// coordinator's own commands — `role fire`, `run wait`, `dispatch release` — so a launch is
+/// meta-agent's own commands — `role fire`, `run wait`, `dispatch release` — so a launch is
 /// never cut short by a session being released under it.
 pub fn drain_queue(env: &dyn Environment, exec: &dyn ExecEnvironments, run_id: &str) -> Result<Value> {
     let store = Store::open(env)?;
@@ -234,7 +234,7 @@ fn drain_with(
                 drained.started.push(entry.dispatch_id);
             }
             Err(error) => {
-                // Nobody is waiting on this launch's output any more; the coordinator hears of
+                // Nobody is waiting on this launch's output any more; the meta-agent hears of
                 // the failure the way it hears of everything else, through the Run inbox.
                 let message = format!(
                     "the queued launch of role '{}' ({}) failed when its place came free: {error:#}",

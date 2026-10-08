@@ -36,7 +36,7 @@ pub struct ConsoleHandle {
 
 pub trait Control {
     /// Closes a Run: the same lifecycle `meta finish` runs, callable by the operator directly
-    /// when its own coordinator cannot. Returns what happened, in a phrase.
+    /// when its own meta-agent cannot. Returns what happened, in a phrase.
     fn close_run(&self, run_id: &str) -> Result<String>;
     /// Removes the worktrees a finished Run left behind, keeping any with uncommitted work.
     /// Returns what happened, in a phrase.
