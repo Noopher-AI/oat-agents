@@ -1,3 +1,4 @@
 /target/
 /specs/
 /.agents/.cache/
+__pycache__/
