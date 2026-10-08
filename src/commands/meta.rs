@@ -20,14 +20,19 @@ use std::str::FromStr;
 
 #[derive(Subcommand, Debug)]
 pub enum MetaCommand {
+    /// Start a Run from a goal: create the meta-agent's worktree and launch it in its own tmux
+    /// session.
     Fire(FireArgs),
+    /// Close a Run whose Dispatches are settled and released, and print its receipt.
     Finish(FinishArgs),
 }
 
 #[derive(Args, Debug)]
 pub struct FireArgs {
+    /// The goal, as text.
     #[arg(long)]
     pub prompt: Option<String>,
+    /// A file holding the goal.
     #[arg(long)]
     pub input_file: Option<PathBuf>,
     #[arg(long, default_value = ".")]

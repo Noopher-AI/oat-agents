@@ -21,6 +21,8 @@ use std::str::FromStr;
 
 #[derive(Subcommand, Debug)]
 pub enum RoleCommand {
+    /// Launch a member agent of a role in this Run, or queue it while the role is at its
+    /// limit. Runs only inside a Run.
     Fire(FireArgs),
 }
 

@@ -15,10 +15,16 @@ use std::time::Duration;
 
 #[derive(Subcommand, Debug)]
 pub enum DispatchCommand {
+    /// Settle this Dispatch once, with an outcome and a report; the meta-agent receives it as
+    /// `member_done`.
     Done(DoneArgs),
+    /// Ask the meta-agent through the Run inbox and wait for its reply.
     Ask(AskArgs),
+    /// A Dispatch's record and whether its session is still alive.
     Show(ShowArgs),
+    /// A Dispatch's transcript or terminal screen.
     Read(ReadArgs),
+    /// End a Dispatch's session; with `--remove-worktree`, also remove its worktree.
     Release(ReleaseArgs),
 }
 

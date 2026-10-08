@@ -15,9 +15,14 @@ use std::time::Duration;
 
 #[derive(Subcommand, Debug)]
 pub enum RunCommand {
+    /// Block for the next delivery from the Run inbox; on timeout, report each active
+    /// Dispatch's liveness. Only the meta-agent consumes the inbox.
     Wait(WaitArgs),
+    /// Acknowledge a delivery so it is not handed over again.
     Ack(AckArgs),
+    /// Answer one inbox message, unblocking the member agent's `dispatch ask`.
     Reply(ReplyArgs),
+    /// Remove a finished Run's worktrees, and the branches its base already contains.
     Clean(CleanArgs),
 }
 

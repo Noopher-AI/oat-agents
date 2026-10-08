@@ -11,7 +11,9 @@ use serde_json::{json, Value};
 
 #[derive(Subcommand, Debug)]
 pub enum GoalCommand {
+    /// The goal one Run was fired with.
     Show(ShowArgs),
+    /// Every Run's goal.
     List(ListArgs),
 }
 

@@ -12,7 +12,9 @@ use serde_json::{json, Value};
 
 #[derive(Subcommand, Debug)]
 pub enum ChecklistCommand {
+    /// Set, link, check or uncheck the Run's checklist items.
     Update(UpdateArgs),
+    /// The checklist, and where the Dispatches linked to each item stand.
     Show(ShowArgs),
 }
 

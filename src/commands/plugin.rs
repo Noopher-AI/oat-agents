@@ -24,8 +24,11 @@ pub enum PluginCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum TrustSource {
+    /// Trust a plugin built into this binary.
     Embedded(TrustEmbeddedArgs),
+    /// Trust a git plugin at one commit, or at every commit with `latest`.
     Git(TrustGitArgs),
+    /// Trust an in-repository plugin by its content hash.
     Path(TrustPathArgs),
 }
 

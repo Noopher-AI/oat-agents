@@ -12,9 +12,13 @@ use std::collections::BTreeSet;
 
 #[derive(Subcommand, Debug)]
 pub enum LogCommand {
+    /// One Run's workflow log.
     Show(ShowArgs),
+    /// Append a decision, a needs-human question or another event to the workflow log.
     Record(RecordArgs),
+    /// Every agent that appears in a Run's workflow log.
     Agents(AgentsArgs),
+    /// Every Run and whether it is still open.
     Runs(RunsArgs),
 }
 

@@ -41,12 +41,12 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum TopCommand {
-    /// The meta-agent's own lifecycle.
+    /// The meta-agent's own lifecycle: start a Run from a goal, and finish it.
     Meta {
         #[command(subcommand)]
         command: commands::meta::MetaCommand,
     },
-    /// Launching a non-core role.
+    /// Launch a member agent: one Dispatch of a plugin role, from inside a Run.
     Role {
         #[command(subcommand)]
         command: commands::role::RoleCommand,
@@ -162,6 +162,22 @@ mod tests {
     #[test]
     fn cli_definition_is_internally_consistent() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn every_subcommand_says_what_it_is_for() {
+        fn walk(command: &clap::Command, path: &str, missing: &mut Vec<String>) {
+            for sub in command.get_subcommands().filter(|sub| sub.get_name() != "help") {
+                let path = format!("{path} {}", sub.get_name());
+                if sub.get_about().is_none() {
+                    missing.push(path.clone());
+                }
+                walk(sub, &path, missing);
+            }
+        }
+        let mut missing = Vec::new();
+        walk(&Cli::command(), "oat-agents", &mut missing);
+        assert!(missing.is_empty(), "subcommands with no --help description: {missing:?}");
     }
 
     #[test]
