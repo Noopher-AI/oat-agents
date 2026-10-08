@@ -1,4 +1,8 @@
 <p align="center">
+  <b>English</b> · <a href="README.zh-TW.md">繁體中文</a>
+</p>
+
+<p align="center">
   <img src="docs/assets/hero.svg" alt="The oat-agents live view: the whole team on one screen, a meta-agent and the member agents it sent out, each on its own branch, worktree and tmux session, writing to the meta-agent through the Run inbox. One key takes you into one agent's own session to type into it; one key brings you back to the team." width="100%">
 </p>
 

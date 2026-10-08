@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corrections. The planner marks each step's check and dependencies, the reviewer leaves the
   worker's worktree untouched and lists each problem with its file and line, and the console
   names why a stuck Run is stuck.
+- A Traditional Chinese README, `README.zh-TW.md`, linked from the top of `README.md`.
 - Every subcommand has a `--help` description.
 - `meta fire` and a launched `role fire` report the agent's tmux `session` and the exact
   `attach` command for it. Agents run on a private tmux server, where a plain `tmux attach`
