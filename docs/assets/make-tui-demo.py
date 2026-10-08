@@ -29,7 +29,7 @@ C = {
 ROLE = {"oat-meta": "magenta", "planner": "cyan", "worker": "green", "reviewer": "yellow"}
 
 RUN = "rate-limit-login"
-META = "oat-meta-3c1e-rate-limit-login"
+META = "meta-3c1e-rate-limit-login"
 PLAN = "planner-8a02-plan-rate-limit"
 WK_A = "worker-51d9-token-bucket"
 WK_B = "worker-c7e4-login-429"
@@ -54,14 +54,14 @@ EVENTS = [
     ("14:02:11", "·", "◆", "white", "run_created", f"{RUN}"),
     ("14:02:11", "·", "Σ", "cyan", "exec_profile_selected", "pod:local"),
     ("14:02:13", META, "▸", "green", "agent_enter", "oat-meta (claude)"),
-    ("14:02:40", META, "◆", "magenta", "delegation", "planner: turn the Big Plan into steps"),
+    ("14:02:40", META, "◆", "magenta", "delegation", "planner: turn the goal into steps"),
     ("14:02:41", PLAN, "▸", "green", "agent_enter", "planner (claude)"),
-    ("14:06:02", PLAN, "✉", "cyan", "inbox_message", "completion"),
+    ("14:06:02", PLAN, "✉", "cyan", "inbox_message", "member_done"),
     ("14:06:03", PLAN, "✓", "blue", "agent_exit", "succeeded"),
     ("14:06:30", WK_A, "▸", "green", "agent_enter", "worker (claude)"),
     ("14:06:31", WK_B, "▸", "green", "agent_enter", "worker (codex)"),
     ("14:06:44", WK_A, "▣", "blue", "env_ready", "pod oat-51d9 ready"),
-    ("14:19:52", WK_A, "✉", "cyan", "inbox_message", "completion"),
+    ("14:19:52", WK_A, "✉", "cyan", "inbox_message", "member_done"),
     ("14:19:58", REV, "▸", "green", "agent_enter", "reviewer (claude) in worker-51d9's worktree"),
     ("14:27:15", REV, "★", "yellow", "review-result", "FAIL: burst of 20 not refused under load"),
     ("14:27:20", META, "◆", "magenta", "retry", "worker: fix exactly what the review found"),
@@ -269,7 +269,7 @@ WORKER_LIVE = [
 
 META_LIVE = [
     ("white", "● The correction round depends on one product decision I can't"),
-    ("white", "  make from the Big Plan: what a locked account should get back."),
+    ("white", "  make from the goal: what a locked account should get back."),
     ("fg", ""),
     ("white", "● Bash(oat-agents log record --event needs-human --message \"429 or 503 …?\")"),
     ("yellow", "  ⎿  🙋 waiting for the operator"),
@@ -316,7 +316,7 @@ FRAMES = [
     (3.2, dict(agents=roster(4), events=15, events_shown=15, tokens="3.3M", cost="$11.39",
                selected=2, tab="live", tabs=ALL_TABS, page=WORKER_LIVE, hints=LIVE_HINTS)),
     (2.2, dict(agents=roster(5), events=16, events_shown=16, tokens="4.2M", cost="$13.39",
-               notice="oat-meta is asking: 429 or 503 for a locked account?")),
+               notice="the meta-agent is asking: 429 or 503 for a locked account?")),
     (3.4, dict(agents=roster(5), events=16, events_shown=16, tokens="4.2M", cost="$13.39",
                selected=1, tab="live", tabs=ALL_TABS, page=META_LIVE, hints=TYPING_HINTS,
                typing=True)),
@@ -337,14 +337,14 @@ FRAMES[-1][1]["agents"] = [
 
 # One line under the terminal for each frame, saying what just happened.
 CAPTIONS = [
-    "① meta fire starts a Run: oat-meta gets its own worktree and tmux session",
-    "② oat-meta delegates the first step to the plugin's planner role",
-    "③ The plan comes back via the Run inbox; two workers start, on Claude Code and Codex",
-    "④ A worker settles; an independent reviewer starts inside its worktree",
-    "⑤ The review fails; the fix goes to a new Dispatch, the failed one stays on record",
-    "⑥ Any agent's live terminal is one keypress away; its row says where tests ran",
-    "⑦ 🙋 oat-meta needs a decision only you can make, and the view flags it",
-    "⑧ Press enter and type the answer straight into oat-meta's session",
+    "① meta fire starts a Run: the meta-agent gets its own worktree and tmux session",
+    "② The meta-agent hands the first step to a planner, a member agent",
+    "③ The plan comes back by mail; two workers start, each on a different backend",
+    "④ A worker reports done; an independent reviewer starts inside its worktree",
+    "⑤ The review fails; the fix goes to a new member, the failed one stays on record",
+    "⑥ Every agent is a real session; its live screen is one keypress away",
+    "⑦ 🙋 The meta-agent needs a decision only you can make, and the view flags it",
+    "⑧ Press enter and type the answer straight into the meta-agent's session",
     "⑨ A fresh reviewer re-runs the tests in a pod and passes the fix; you merge",
 ]
 
@@ -401,9 +401,9 @@ def main():
     svg = (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}" role="img" aria-label="An animated replay of the oat-agents '
-        f'live view: oat-meta delegates to a planner, two workers and a reviewer; the review '
-        f'fails, a correction round is fired, oat-meta asks the operator one question, and the '
-        f'second review passes.">'
+        f'live view: the meta-agent delegates to a planner, two workers and a reviewer; the '
+        f'review fails, a correction goes to a new member agent, the meta-agent asks the '
+        f'operator one question, and the second review passes.">'
         f"<style>{''.join(css)}</style>"
         f'<defs><g id="spin" class="sp">{spinner}</g></defs>'
         f"{chrome}{''.join(groups)}</svg>\n"
