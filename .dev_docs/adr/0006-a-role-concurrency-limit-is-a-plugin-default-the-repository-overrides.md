@@ -2,7 +2,7 @@
 
 *Status: in force.*
 
-A Run can start as many Dispatches of one role as its coordinator fires. Each one is a
+A Run can start as many Dispatches of one role as its meta-agent fires. Each one is a
 worktree, an agent session, often an execution environment. Past some number, the machine,
 the cluster or the budget can no longer keep up. The number depends on the role: a role that
 builds and tests costs more than one that reads. It also depends on where the Run happens: the
@@ -18,15 +18,15 @@ limit on how many of that role's Dispatches one Run runs at once. A repository r
 any plugin role in `.oat/roles.toml`. `meta fire` settles each role's effective limit once and
 records it in the Run. A Dispatch holds a place from launch until it is settled or released.
 A `role fire` for a role at its limit is queued, not refused. The CLI launches queued fires
-oldest first from the coordinator's own commands (`role fire`, `run wait`,
+oldest first from the meta-agent's own commands (`role fire`, `run wait`,
 `dispatch release`) as places come free. A queued launch that then fails reaches the
-coordinator as a Run inbox message. One still queued when the Run finishes is dropped and
+meta-agent as a Run inbox message. One still queued when the Run finishes is dropped and
 logged.
 
 **Rejected.**
-- Refusing a `role fire` over the limit and leaving the retry to the coordinator. It needs no
-  queue, but every coordinator then has to track the free places and fire again at the right
-  moment. The limit becomes a rule each plugin's coordinator must be taught to follow, rather
+- Refusing a `role fire` over the limit and leaving the retry to the meta-agent. It needs no
+  queue, but every meta-agent then has to track the free places and fire again at the right
+  moment. The limit becomes a rule each plugin's meta-agent must be taught to follow, rather
   than a bound the CLI keeps.
 - Limits in the plugin only. The plugin author cannot know the repository's build cost or the
   machine it runs on.
@@ -36,16 +36,16 @@ logged.
   hold each other up. `role fire` would have to read every open Run, and a Run's behaviour
   would depend on Runs it knows nothing about.
 - Launching queued fires from `dispatch done`. That command runs in the settling Dispatch's own
-  session, and the coordinator may release that session, killing the launch partway.
+  session, and the meta-agent may release that session, killing the launch partway.
 
 **Consequences.**
 - `role fire` has two answers: a launched Dispatch, or a queued launch with the id its Dispatch
-  will carry. The coordinator baseline has to say so, or a coordinator fires the same work
+  will carry. The meta-agent baseline has to say so, or a meta-agent fires the same work
   twice.
-- A place freed while the coordinator runs none of its commands stays empty until it does.
-  Settlement always reaches the coordinator through `run wait`, so the delay is only as long as
-  the coordinator's own turn.
-- A queued Fresh-start Dispatch branches from the coordinator's worktree as it is when the
+- A place freed while the meta-agent runs none of its commands stays empty until it does.
+  Settlement always reaches the meta-agent through `run wait`, so the delay is only as long as
+  the meta-agent's own turn.
+- A queued Fresh-start Dispatch branches from the meta-agent's worktree as it is when the
   Dispatch launches, not when it was fired.
 - Changing `.oat/roles.toml` or a plugin's default affects the next Run, never one already
   running.

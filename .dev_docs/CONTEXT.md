@@ -1,7 +1,7 @@
 # oat-agents
 
 A command-line tool that runs a supervised team of coding agents on one machine: a
-coordinator takes one Big Plan and delegates bounded work to other agents, each in its own
+meta-agent takes one goal and delegates bounded work to member agents, each in its own
 git worktree and tmux session, settling the results through a file-based inbox. The core
 supplies the mechanism and two roles; plugins supply every other role and the way a team
 works.
@@ -16,12 +16,16 @@ defect.
 
 ### Work
 
-**Big Plan**
-The one input a Run is started from: what is to be done, written for the coordinator.
-*Avoid*: **task list** — the coordinator decides the steps; a Big Plan states the outcome.
+**Goal**
+The one input a Run is started from: what is to be done, written for the meta-agent.
+`meta fire` takes it; `goal show` reads it back.
+*Avoid*: **task list** — the meta-agent decides the steps; a goal states the outcome.
+*Avoid*: **Big Plan**, **objective** — earlier names for the goal. Two names read as two
+inputs, and Runs recorded before the rename still carry it as `big_plan`, so a reader that
+looks only for `goal` misses them.
 
 **Run**
-One execution of one Big Plan, from `meta fire` until the coordinator finishes it. Owns its
+One execution of one goal, from `meta fire` until the meta-agent finishes it. Owns its
 Dispatches, its Run inbox and its workflow log.
 *Avoid*: **job**, **session** — a session is one agent's terminal; a Run spans many of them.
 
@@ -33,7 +37,7 @@ is a new Dispatch), and conflating them loses which attempt said what.
 **hash_id**
 The stable identifier of one agent execution, `<role>-<4 hex>-<name>`, quoted in every log
 line about it. `<name>` is what the Dispatch is for — its `role fire --name`, or the branch of
-the worktree it starts in — and the Run's name only for the coordinator and for a launch that
+the worktree it starts in — and the Run's name only for the meta-agent and for a launch that
 named nothing.
 *Avoid*: deriving a hash_id anywhere but from the Dispatch's record — a copy that uses a
 different name looks for a session that does not exist.
@@ -52,26 +56,23 @@ not settled is not finished, whatever its terminal shows.
 ### Communication
 
 **Run inbox**
-The Run's queue of messages from its agents to the coordinator — questions, escalations and
+The Run's queue of messages from its member agents to the meta-agent — questions, escalations and
 completion reports. It has exactly one consumer: that Run's `oat-meta`.
 *Avoid*: **reading the inbox** for anything that merely observes — a delivery is handed over
-once, and an observer that takes one leaves the coordinator waiting for a message that is
+once, and an observer that takes one leaves the meta-agent waiting for a message that is
 already gone. Observers read the workflow log.
 
 **Delivery**
-One batch handed to the coordinator by `run wait`, acknowledged as a whole.
+One batch handed to the meta-agent by `run wait`, acknowledged as a whole.
 
 **Workflow log**
 The append-only record of everything that happened in a Run, written by the CLI and by the
-coordinator's decisions. The only place an observer reads a Run from.
+meta-agent's decisions. The only place an observer reads a Run from.
 
 ### Roles
 
 **Role**
 A named kind of agent: its instructions, the skills it may load, and its model settings.
-*Avoid*: **subagent** — a role runs as its own session in its own worktree, not inside
-another agent's turn; treating it as a subagent leads to relaying work that was meant to
-be delegated.
 
 **Core role**
 A role the core ships and owns: `oat-meta` and `oat-console`. Only core roles carry the
@@ -84,8 +85,25 @@ plugin. The core knows nothing about what a plugin role does.
 a plugin's decision.
 
 **oat-meta**
-The coordinator of one Run. It delegates, reads the Run inbox, and finishes the Run; it
-does not do the Big Plan's work itself.
+The core role that runs each Run's meta-agent.
+
+**Meta-agent**
+The agent of a Run's `oat-meta` Dispatch. It delegates the goal's work to member agents, is
+the only consumer of the Run inbox, and finishes the Run; it does not do the goal's work
+itself.
+*Avoid*: **coordinator** — it names a job, not an agent. A plugin role can coordinate too,
+and the word does not say which agent alone may consume the Run inbox.
+
+**Member agent**
+The agent of a Dispatch of a plugin role, launched with `role fire`. It works in its own
+worktree and settles its own Dispatch. Every agent in a Run is either its meta-agent or a
+member agent, never both; `oat-console` belongs to no Run and is neither.
+*Avoid*: **subagent** — a member agent runs as its own session in its own worktree, not
+inside the meta-agent's turn; treating it as a subagent leads to relaying work that was
+meant to be delegated.
+*Avoid*: **worker** — a role of the example plugin. The settlement message was once named
+`worker_done` though every member agent sends it, which read as only that role having
+finished.
 
 **oat-console**
 The operator's system console. It belongs to no Run and observes all of them; it never
@@ -111,7 +129,7 @@ environment, not the program that runs the agent.
 ### Execution
 
 **Worktree**
-A git worktree the core creates for one Dispatch, branched from its coordinator's worktree,
+A git worktree the core creates for one Dispatch, branched from its meta-agent's worktree,
 or, for a role that starts in an existing worktree and is fired with `--at`, from that commit.
 
 **Execution environment**

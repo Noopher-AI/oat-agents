@@ -4,7 +4,7 @@
 
 A plugin declares each role's model per backend, and `core/oat-console.toml` may choose the
 console's backend. Which backend a plugin role runs on was the Run's, set by `meta fire
---agent`, unless the coordinator named one on a single `role fire`. The plugin author knows
+--agent`, unless the meta-agent named one on a single `role fire`. The plugin author knows
 what a role needs, but not what the repository can pay for, which backends its people have
 access to, or which model does well on its code. Those facts belong to the repository, and
 until now a repository could change them only by forking the plugin or by relying on every
@@ -43,7 +43,7 @@ belongs to no Run, reads the file each time it is opened.
 - `meta fire --agent` is optional; a Run's backend without it is the repository's choice for
   `oat-meta`.
 - A plugin can no longer assume the backend its roles run on. It still cannot today — the
-  coordinator could always pass `--agent` — but the repository now makes it a standing choice.
+  meta-agent could always pass `--agent` — but the repository now makes it a standing choice.
 - Changing `.oat/roles.toml` affects the next Run and the next console opened, never a Run
   already running.
 - An unknown backend refuses the Run before anything is created, with `role_settings_invalid`.
