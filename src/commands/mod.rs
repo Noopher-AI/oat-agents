@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 oat-agents contributors
 
-pub mod big_plan;
+pub mod goal;
 pub mod checklist;
 pub mod console;
 pub mod dispatch;

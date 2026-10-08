@@ -184,6 +184,16 @@ pub fn hash_id(role: &str, name: &str, seed: &str) -> String {
     format!("{role}-{hex}-{name}")
 }
 
+/// A Run's goal from its `run_created` details. Logs written before the rename carry it as
+/// `big_plan`.
+pub fn run_goal(details: &serde_json::Value) -> Option<&str> {
+    details
+        .get("goal")
+        .or_else(|| details.get("big_plan"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|goal| !goal.is_empty())
+}
+
 pub mod events {
     pub const RUN_CREATED: &str = "run_created";
     pub const AGENT_ENTER: &str = "agent_enter";
@@ -244,6 +254,15 @@ mod tests {
         // Deterministic for the same seed, distinct for a different one.
         assert_eq!(hash_id("worker", "glaze", "seed-1"), id);
         assert_ne!(hash_id("worker", "glaze", "seed-2"), id);
+    }
+
+    #[test]
+    fn a_runs_goal_is_read_under_its_new_name_or_its_old_one() {
+        use serde_json::json;
+        assert_eq!(run_goal(&json!({"goal": "Glaze every pot"})), Some("Glaze every pot"));
+        assert_eq!(run_goal(&json!({"big_plan": "Sweep the studio"})), Some("Sweep the studio"));
+        assert_eq!(run_goal(&json!({"goal": "", "repo": "/tmp"})), None);
+        assert_eq!(run_goal(&json!({"repo": "/tmp"})), None);
     }
 
     #[test]

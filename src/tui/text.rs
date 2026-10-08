@@ -321,8 +321,8 @@ pub(crate) fn event_detail(row: &Value) -> String {
         events::EXEC_PROFILE_NONE => parts.push("host".to_owned()),
         events::ENV_SKIPPED => parts.push("HOST (no pod)".to_owned()),
         events::RUN_CREATED => {
-            if let Some(plan) = string_field(row, "big_plan") {
-                parts.push(plan.lines().next().unwrap_or_default().to_owned());
+            if let Some(goal) = crate::event_log::run_goal(row) {
+                parts.push(goal.lines().next().unwrap_or_default().to_owned());
             }
         }
         _ => {}

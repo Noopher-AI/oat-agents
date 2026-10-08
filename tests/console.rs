@@ -165,7 +165,7 @@ fn each_repositorys_read_only_run_listing_only_shows_its_own_runs() {
         plugins: Vec::new(),
         meta_worktree: None,
         meta_dispatch_id: None,
-        big_plan: None,
+        goal: None,
         role_limits: Default::default(),
         role_settings: Default::default(),
     };

@@ -66,10 +66,11 @@ pub enum TopCommand {
         #[command(subcommand)]
         command: commands::log::LogCommand,
     },
-    /// The Big Plan a Run was fired with.
-    BigPlan {
+    /// The goal a Run was fired with.
+    #[command(alias = "big-plan")]
+    Goal {
         #[command(subcommand)]
-        command: commands::big_plan::BigPlanCommand,
+        command: commands::goal::GoalCommand,
     },
     /// The Run's checklist.
     Checklist {
@@ -140,7 +141,7 @@ pub fn execute_with_exec(
         TopCommand::Run { command } => commands::run::run(command, env, exec),
         TopCommand::Dispatch { command } => commands::dispatch::run(command, env, exec),
         TopCommand::Log { command } => commands::log::run(command, env),
-        TopCommand::BigPlan { command } => commands::big_plan::run(command, env),
+        TopCommand::Goal { command } => commands::goal::run(command, env),
         TopCommand::Checklist { command } => commands::checklist::run(command, env),
         TopCommand::Env { command } => {
             let log = event_log::EventLog::open(env);
@@ -161,5 +162,13 @@ mod tests {
     #[test]
     fn cli_definition_is_internally_consistent() {
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn big_plan_still_parses_as_goal_but_is_not_advertised() {
+        let cli = Cli::try_parse_from(["oat-agents", "big-plan", "list"]).unwrap();
+        assert!(matches!(cli.command, TopCommand::Goal { .. }));
+        let help = Cli::command().render_long_help().to_string();
+        assert!(help.contains("goal") && !help.contains("big-plan"), "{help}");
     }
 }

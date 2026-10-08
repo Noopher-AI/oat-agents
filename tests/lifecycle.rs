@@ -102,6 +102,12 @@ fn meta_fire_creates_a_run_a_worktree_and_a_session() {
         new_session_call.contains("oat_meta-"),
         "session named after the meta hash_id: {new_session_call}"
     );
+
+    // The goal is read back as the meta-agent was given it, under its old name too.
+    for command in ["goal", "big-plan"] {
+        let shown = run_json(parse(&[command, "show", "--run", "glaze"]), &env, &catalog);
+        assert_eq!(shown["goal"], "Ship the glaze feature", "{command} show");
+    }
 }
 
 #[test]

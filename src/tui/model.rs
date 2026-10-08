@@ -151,8 +151,8 @@ pub struct RunSummary {
     pub run_id: String,
     pub repo: Option<String>,
     pub backend: String,
-    /// First line of the Big Plan, as a title.
-    pub objective: Option<String>,
+    /// First line of the goal, as a title.
+    pub goal: Option<String>,
     /// What the Run is waiting on a person to answer, if anything.
     pub question: Option<String>,
     pub started: String,
@@ -239,11 +239,11 @@ impl RunSnapshot {
             run_id: self.run.id.clone(),
             repo: Some(self.run.repo.clone()).filter(|repo| !repo.is_empty()),
             backend: self.run.backend.clone(),
-            objective: self
+            goal: self
                 .run
-                .big_plan
+                .goal
                 .as_deref()
-                .and_then(|plan| plan.lines().map(str::trim).find(|line| !line.is_empty()))
+                .and_then(|goal| goal.lines().map(str::trim).find(|line| !line.is_empty()))
                 .map(|line| line.trim_start_matches('#').trim().to_owned()),
             question: open_question(&self.events),
             started: self.run.created_at.clone(),

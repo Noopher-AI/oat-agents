@@ -35,8 +35,9 @@ pub struct RunRecord {
     pub meta_worktree: Option<String>,
     #[serde(default)]
     pub meta_dispatch_id: Option<String>,
-    #[serde(default)]
-    pub big_plan: Option<String>,
+    /// What the Run was fired to do. Records written before the rename carry it as `big_plan`.
+    #[serde(default, alias = "big_plan")]
+    pub goal: Option<String>,
     /// How many Dispatches of each role may run at once, settled at `meta fire` from the
     /// plugins' defaults and `.oat/roles.toml`. A role not listed has no limit.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -561,12 +562,23 @@ mod tests {
             plugins: Vec::new(),
             meta_worktree: None,
             meta_dispatch_id: None,
-            big_plan: None,
+            goal: None,
             role_limits: Default::default(),
             role_settings: Default::default(),
         };
         store.create_run(&empty).unwrap();
         assert_eq!(store.load_run("r1").unwrap().plugins, Vec::new());
+
+        // A record written before the rename keeps its goal, and is saved under the new key.
+        let old: RunRecord = serde_json::from_value(serde_json::json!({
+            "id": "r0", "name": "r0", "repo": "/tmp/repo", "base_branch": "main",
+            "backend": "claude", "created_at": "2026-01-01T00:00:00Z", "big_plan": "Glaze every pot",
+        }))
+        .unwrap();
+        assert_eq!(old.goal.as_deref(), Some("Glaze every pot"));
+        let saved = serde_json::to_value(&old).unwrap();
+        assert_eq!(saved["goal"], "Glaze every pot");
+        assert!(saved.get("big_plan").is_none());
 
         let mut with_plugins = empty.clone();
         with_plugins.id = "r2".to_string();

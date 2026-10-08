@@ -163,7 +163,7 @@ fn fixture() -> Fixture {
         plugins: Vec::new(),
         meta_worktree: None,
         meta_dispatch_id: Some("dispatch-0".to_string()),
-        big_plan: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
+        goal: Some("# Glaze every pot\n\nThen fire the kiln.".to_string()),
         role_limits: Default::default(),
         role_settings: Default::default(),
     };
@@ -172,7 +172,7 @@ fn fixture() -> Fixture {
         .create_run(&RunRecord {
             id: CLOSED_RUN.to_string(),
             closed_at: Some(now_iso()),
-            big_plan: Some("Sweep the studio".to_string()),
+            goal: Some("Sweep the studio".to_string()),
             ..open.clone()
         })
         .unwrap();
@@ -325,7 +325,7 @@ fn the_picker_lists_every_run_with_its_title_its_pod_and_who_it_waits_on() {
         text.contains("which glaze?") && !text.contains("Glaze every pot"),
         "an open question outranks the title:\n{text}"
     );
-    assert!(text.contains("Sweep the studio"), "the Big Plan's first line is the title:\n{text}");
+    assert!(text.contains("Sweep the studio"), "the goal's first line is the title:\n{text}");
     assert!(text.contains("pod:gb10"), "{text}");
     assert!(text.contains("host"), "{text}");
     assert!(text.contains("enter open"), "{text}");

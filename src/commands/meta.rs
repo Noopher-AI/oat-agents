@@ -64,7 +64,7 @@ pub fn run(command: MetaCommand, env: &dyn Environment, exec: &dyn ExecEnvironme
 }
 
 fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
-    let big_plan = crate::resolve_text_input(&args.prompt, &args.input_file)?;
+    let goal = crate::resolve_text_input(&args.prompt, &args.input_file)?;
     let repo = args
         .repo
         .canonicalize()
@@ -136,7 +136,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         plugins: plugin_records.clone(),
         meta_worktree: Some(path.to_string_lossy().to_string()),
         meta_dispatch_id: Some(dispatch_id.clone()),
-        big_plan: Some(big_plan.clone()),
+        goal: Some(goal.clone()),
         role_limits,
         role_settings: repo_roles.launch,
     };
@@ -148,7 +148,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         dispatch_id: None,
         agent: None,
         event: events::RUN_CREATED.to_string(),
-        details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "big_plan": big_plan})),
+        details: Some(json!({"repo": run_record.repo, "base_branch": base_branch, "goal": goal})),
     })?;
     log.record(&LogEntry {
         timestamp: now_iso(),
@@ -185,7 +185,7 @@ fn fire(args: FireArgs, env: &dyn Environment) -> Result<Value> {
         backend,
         baseline: crate::launch::prompt::OAT_META_BASELINE.to_string(),
         instructions: vec![core_role.instructions.clone()],
-        task: big_plan,
+        task: goal,
         skills: core_role.skills.clone(),
         model: model.clone(),
         role_names_for_preamble: catalog.role_names(),
