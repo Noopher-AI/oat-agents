@@ -83,7 +83,7 @@ fn a_role_at_its_plugin_default_queues_and_starts_once_a_dispatch_settles() {
     settle(&world, "kiln", &first_id);
     let meta_env = world.env().with_var("OAT_RUN_ID", "kiln");
     let delivery = run(parse(&["run", "wait", "--ack", "--timeout-ms", "2000"]), &meta_env).unwrap();
-    assert_eq!(delivery["messages"][0]["kind"], "worker_done");
+    assert_eq!(delivery["messages"][0]["kind"], "member_done");
     assert_eq!(delivery["started_from_queue"], serde_json::json!([second_id]));
 
     let shown = run(parse(&["dispatch", "show", "--dispatch", &second_id]), &meta_env).unwrap();

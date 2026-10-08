@@ -19,9 +19,7 @@ const POLICY_DENYLIST: &[&str] = &[
 #[test]
 fn the_baseline_names_no_role_the_core_does_not_own_and_states_no_team_policy() {
     for text in [OAT_META_BASELINE, ROLE_PROTOCOL] {
-        // `worker_done` is a core-owned Run inbox message kind, not the plugin role `worker`;
-        // strip it before checking for the role word so the message kind does not trip it.
-        let lower = text.to_lowercase().replace("worker_done", "");
+        let lower = text.to_lowercase();
         for word in ROLE_DENYLIST {
             assert!(
                 !lower.contains(word),

@@ -447,11 +447,11 @@ fn a_run_goes_from_delegation_to_finish() {
     let done_cli = parse(&["dispatch", "done", "--report", "shipped the glaze"]);
     run_json(done_cli, &worker_env, &catalog);
 
-    // The coordinator waits again, receives the worker_done delivery, and acknowledges it.
+    // The coordinator waits again, receives the member_done delivery, and acknowledges it.
     let wait_cli = parse(&["run", "wait", "--run", &run_id, "--ack", "--timeout-ms", "5000"]);
     let wait_result = run_json(wait_cli, &meta_env, &catalog);
     assert_eq!(wait_result["timed_out"], false);
-    assert_eq!(wait_result["messages"][0]["kind"], "worker_done");
+    assert_eq!(wait_result["messages"][0]["kind"], "member_done");
 
     // The coordinator releases the Dispatch and its worktree, then finishes the Run.
     let release_cli = parse(&["dispatch", "release", "--dispatch", &dispatch_id, "--run", &run_id, "--remove-worktree", "--force"]);

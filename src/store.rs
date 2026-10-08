@@ -116,7 +116,10 @@ impl DispatchRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageKind {
-    WorkerDone,
+    /// A member agent settled its Dispatch; the message is its report. Inboxes written before
+    /// the rename carry it as `worker_done`.
+    #[serde(alias = "worker_done")]
+    MemberDone,
     Question,
     Escalation,
     /// A queued `role fire` that could not be launched when its place came free. Nobody is
@@ -484,7 +487,7 @@ mod tests {
     #[test]
     fn an_undelivered_message_is_delivered_once_and_not_redelivered_after_ack() {
         let (_dir, store) = store();
-        store.append_inbox("run1", "dispatch1", MessageKind::WorkerDone, "done").unwrap();
+        store.append_inbox("run1", "dispatch1", MessageKind::MemberDone, "done").unwrap();
 
         let first = store
             .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
@@ -504,6 +507,26 @@ mod tests {
             .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
             .unwrap();
         assert!(third.is_none(), "an acknowledged delivery is not redelivered");
+    }
+
+    #[test]
+    fn a_message_written_as_worker_done_is_delivered_as_member_done() {
+        let (_dir, store) = store();
+        let dir = store.inbox_dir("run1");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("1.json"),
+            r#"{"seq": 1, "dispatch_id": "dispatch1", "kind": "worker_done", "message": "done",
+                "created_at": "2026-01-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+
+        let delivery = store
+            .wait_inbox("run1", Duration::from_millis(50), Duration::from_millis(5))
+            .unwrap()
+            .expect("a delivery");
+        assert!(matches!(delivery.messages[0].kind, MessageKind::MemberDone));
+        assert_eq!(serde_json::to_value(&delivery.messages[0].kind).unwrap(), "member_done");
     }
 
     #[test]
