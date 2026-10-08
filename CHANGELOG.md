@@ -13,23 +13,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CODE_OF_CONDUCT.md`, issue and pull request templates, `CODEOWNERS`, and Dependabot
   configuration. CI now also runs on pull requests.
 - An SPDX license header naming the oat-agents contributors on every source file, checked in CI.
-- The example plugin's team works a change through to the coordinator's branch: `oat-meta` skips
-  the planner when the Big Plan is already concrete, fires independent pieces together, reviews
+- The example plugin's team works a change through to the meta-agent's branch: `oat-meta` skips
+  the planner when the goal is already concrete, fires independent pieces together, reviews
   from the worker's worktree, merges a passed branch into its own worktree, hands a correction
   the failed branch and the reviewer's findings, and raises `needs-human` after two failed
   corrections. The planner marks each step's check and dependencies, the reviewer leaves the
   worker's worktree untouched and lists each problem with its file and line, and the console
   names why a stuck Run is stuck.
+- Every subcommand has a `--help` description.
+- `meta fire` and a launched `role fire` report the agent's tmux `session` and the exact
+  `attach` command for it. Agents run on a private tmux server, where a plain `tmux attach`
+  does not find them.
 
 ### Changed
 
 - The example plugin's `branch-naming` skill is replaced by `committing`. Its rule had a worker
   switch to a `<role>/<slug>` branch, leaving the Dispatch's own branch — the one the
-  coordinator merges and cleanup checks — without the work.
+  meta-agent merges and cleanup checks — without the work.
+- The Big Plan is now the **goal**: `big-plan show|list` is `goal show|list` and prints the key
+  `goal`. `big-plan` still works as a hidden alias, and Runs and logs recorded with `big_plan`
+  still show their goal.
+- The Run inbox's settlement message is `member_done` instead of `worker_done`, since every
+  member agent sends it. An inbox holding `worker_done` still reads. A plugin whose
+  instructions name `worker_done` should say `member_done`; finish open Runs before upgrading,
+  since their meta-agent was told the old name.
+- The words follow `.dev_docs/CONTEXT.md` throughout: `oat-meta` runs a Run's **meta-agent**,
+  plugin roles run **member agents**, and "coordinator" is retired from prompts, skills, help
+  text and docs.
 
 ### Fixed
 
 - `cargo clippy` on the current stable toolchain passes again, so CI on `main` is green.
+- The live view's log page no longer tells a Codex agent that Claude Code's session directory
+  is not reachable; it names the agent's own backend.
 
 ## [0.1.0]
 
