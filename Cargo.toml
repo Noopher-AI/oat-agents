@@ -15,7 +15,7 @@ name = "oat-agents"
 path = "src/main.rs"
 
 [dependencies]
-ansi-to-tui = "7.0.0"
+ansi-to-tui = "8.0.0"
 anyhow = "1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive"] }
