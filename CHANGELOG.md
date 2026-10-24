@@ -44,6 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Claude Opus 5.5 and Sonnet 5.5 are priced at their own published rates. Opus 5.5 matched the
+  `claude-opus` prefix and was priced at $5/$25 per million tokens instead of $4/$20, and both
+  models read cached tokens at 0.05x input, not 0.1x.
 - `cargo clippy` on the current stable toolchain passes again, so CI on `main` is green.
 - The live view's log page no longer tells a Codex agent that Claude Code's session directory
   is not reachable; it names the agent's own backend.
